@@ -41,6 +41,12 @@ export interface ImageSource {
     fit?: "cover" | "contain";
     positionX?: number;
     positionY?: number;
+    /**
+     * Ampliación, como en el recorte nativo de Discord. 1 = sin ampliar (usa
+     * `fit` tal cual); por encima de 1, la imagen crece y `positionX/Y` decide
+     * qué parte queda centrada. Rango pensado para el editor: 1–3.
+     */
+    zoom?: number;
 }
 
 export interface BannerStyle {

@@ -78,6 +78,59 @@ function extractUserId(img: HTMLImageElement): string | null {
 }
 
 /**
+ * Clase y atributo para avatares fuera de un perfil: mensajes, lista de
+ * miembros, barra de DMs, tarjetas de llamada. A diferencia del resto de
+ * `SELECTORS`, aquí no hay una "raíz de perfil" que envuelva nada — cada
+ * avatar se marca a sí mismo, así que el CSS que lo apunta usa un selector
+ * compuesto (`[data-xcord-user="id"].xcord-avatar-standalone`, sin espacio)
+ * en vez del descendiente que usa el resto del motor. Ver `css.ts`.
+ */
+const STANDALONE_AVATAR_CLASS = `${NS}-avatar-standalone`;
+
+/** Cuántos niveles subimos desde el `<img>` buscando su contenedor. */
+const MAX_STANDALONE_DEPTH = 6;
+
+/**
+ * El contenedor que hay que pintar para reemplazar un avatar suelto.
+ *
+ * Igual que en el perfil, el contenedor lleva la imagen de fondo y el `<img>`
+ * real se oculta encima. Si ningún ancestro cercano coincide con el patrón de
+ * clase conocido —contextos que aún no hemos visto—, usamos el padre directo:
+ * casi cualquier `<img>` en la interfaz de Discord tiene alguno.
+ */
+function findAvatarContainer(img: HTMLImageElement): Element {
+    let el: Element | null = img.parentElement;
+    for (let i = 0; el && i < MAX_STANDALONE_DEPTH; i++, el = el.parentElement) {
+        if (el.matches(SELECTORS.avatar)) return el;
+    }
+    return img.parentElement ?? img;
+}
+
+function processStandaloneAvatar(img: HTMLImageElement) {
+    const userId = extractUserId(img);
+    const container = findAvatarContainer(img);
+    const attr = `data-${NS}-user`;
+
+    if (!userId) {
+        // El nodo se recicló para un usuario sin id resoluble (avatar por
+        // defecto): si venía marcado de antes, hay que limpiarlo o se queda
+        // mostrando la imagen de quien tenía ese hueco previamente.
+        if (container.hasAttribute(attr)) {
+            container.removeAttribute(attr);
+            container.classList.remove(STANDALONE_AVATAR_CLASS);
+        }
+        return;
+    }
+
+    // Ya marcado para este mismo usuario: nada que hacer. Distinto id —listas
+    // virtualizadas reciclan el nodo al hacer scroll— y sí hay que re-marcar.
+    if (container.getAttribute(attr) === userId) return;
+
+    container.setAttribute(attr, userId);
+    container.classList.add(STANDALONE_AVATAR_CLASS);
+}
+
+/**
  * Sube desde un avatar hasta la raíz de su perfil.
  *
  * Nos quedamos con el ancestro *más alto* que encaje, no con el primero: el
@@ -333,8 +386,12 @@ export function startObserver(onSeen: OnProfileSeen) {
     if (observer) return;
 
     const scan = (node: ParentNode) => {
-        for (const img of node.querySelectorAll<HTMLImageElement>(AVATAR_IMG))
+        for (const img of node.querySelectorAll<HTMLImageElement>(AVATAR_IMG)) {
             processAvatar(img, onSeen);
+            processStandaloneAvatar(img);
+            const id = extractUserId(img);
+            if (id) onSeen(id);
+        }
     };
 
     scan(document);
@@ -366,7 +423,12 @@ export function startObserver(onSeen: OnProfileSeen) {
 
                 if (node instanceof HTMLImageElement) {
                     // El nodo añadido es la propia imagen.
-                    if (node.matches(AVATAR_IMG)) processAvatar(node, onSeen);
+                    if (node.matches(AVATAR_IMG)) {
+                        processAvatar(node, onSeen);
+                        processStandaloneAvatar(node);
+                        const id = extractUserId(node);
+                        if (id) onSeen(id);
+                    }
                 } else if (node.getElementsByTagName("img").length) {
                     // Solo bajamos al subárbol si contiene imágenes.
                     // `getElementsByTagName` es una colección viva y comparar su
@@ -400,6 +462,10 @@ export function stopObserver() {
     for (const className of [`${NS}-avatar`, `${NS}-banner`, `${NS}-display-name`, `${NS}-bio`, `${NS}-bg`, `${NS}-dynamic-bg`]) {
         for (const el of document.querySelectorAll(`.${className}`))
             el.classList.remove(className);
+    }
+    for (const el of document.querySelectorAll(`.${STANDALONE_AVATAR_CLASS}`)) {
+        el.classList.remove(STANDALONE_AVATAR_CLASS);
+        el.removeAttribute(`data-${NS}-user`);
     }
     for (const el of document.querySelectorAll(`.${BORDER_LAYERS_CLASS}`))
         el.remove();

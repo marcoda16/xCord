@@ -571,11 +571,17 @@ const FIT_OPTIONS = [
  * aquí no se recorta de verdad: solo cambia `background-position`, así que
  * sigue funcionando con GIFs animados y no hace falta reprocesar el archivo.
  */
-function ImagePositionPicker({ url, fit, positionX, positionY, onChange, aspectRatio = "1200 / 468", round = false }: {
+/** Misma fórmula que `imageSizeCss` en css.ts — el preview no puede mentir. */
+function previewBackgroundSize(fit: "cover" | "contain", zoom: number): string {
+    return zoom > 1 ? `${Math.round(zoom * 100)}% auto` : fit;
+}
+
+function ImagePositionPicker({ url, fit, positionX, positionY, zoom, onChange, aspectRatio = "1200 / 468", round = false }: {
     url: string;
     fit: "cover" | "contain";
     positionX: number;
     positionY: number;
+    zoom: number;
     onChange: (x: number, y: number) => void;
     /** "1200 / 468" para el banner de Discord, "1 / 1" para el avatar. */
     aspectRatio?: string;
@@ -608,13 +614,14 @@ function ImagePositionPicker({ url, fit, positionX, positionY, onChange, aspectR
                 borderRadius: round ? "50%" : "8px",
                 cursor: dragging ? "grabbing" : "grab",
                 backgroundImage: `url("${url}")`,
-                backgroundSize: fit,
+                backgroundSize: previewBackgroundSize(fit, zoom),
                 backgroundPosition: `${positionX}% ${positionY}%`,
                 backgroundRepeat: "no-repeat",
                 backgroundColor: "var(--background-secondary)",
                 border: "1px solid var(--background-modifier-accent)",
                 position: "relative",
-                userSelect: "none"
+                userSelect: "none",
+                overflow: "hidden"
             }}
         >
             <div
@@ -1260,10 +1267,25 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         fit={draft.banner.image.fit ?? "cover"}
                         positionX={draft.banner.image.positionX ?? 50}
                         positionY={draft.banner.image.positionY ?? 50}
+                        zoom={draft.banner.image.zoom ?? 1}
                         onChange={(positionX, positionY) => setDraft(d => ({
                             ...d,
                             banner: { ...d.banner, image: { ...d.banner!.image!, positionX, positionY } }
                         }))}
+                    />
+                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        Zoom: {(draft.banner.image.zoom ?? 1).toFixed(2)}×
+                    </Forms.FormTitle>
+                    <Slider
+                        minValue={1}
+                        maxValue={3}
+                        initialValue={draft.banner.image.zoom ?? 1}
+                        onValueChange={(v: number) => setDraft(d => ({
+                            ...d,
+                            banner: { ...d.banner, image: { ...d.banner!.image!, zoom: Number(v.toFixed(2)) } }
+                        }))}
+                        markers={[1, 1.5, 2, 2.5, 3]}
+                        onMarkerRender={(v: number) => `${v}×`}
                     />
                     <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
                         <Text variant="text-xs/normal">Ajuste:</Text>
@@ -1282,7 +1304,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             color={Button.Colors.PRIMARY}
                             onClick={() => setDraft(d => ({
                                 ...d,
-                                banner: { ...d.banner, image: { ...d.banner!.image!, positionX: 50, positionY: 50 } }
+                                banner: { ...d.banner, image: { ...d.banner!.image!, positionX: 50, positionY: 50, zoom: 1 } }
                             }))}
                         >Centrar</Button>
                     </Flex>
@@ -1373,12 +1395,27 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         fit={draft.avatar.image.fit ?? "cover"}
                         positionX={draft.avatar.image.positionX ?? 50}
                         positionY={draft.avatar.image.positionY ?? 50}
+                        zoom={draft.avatar.image.zoom ?? 1}
                         aspectRatio="1 / 1"
                         round
                         onChange={(positionX, positionY) => setDraft(d => ({
                             ...d,
                             avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX, positionY } }
                         }))}
+                    />
+                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        Zoom: {(draft.avatar.image.zoom ?? 1).toFixed(2)}×
+                    </Forms.FormTitle>
+                    <Slider
+                        minValue={1}
+                        maxValue={3}
+                        initialValue={draft.avatar.image.zoom ?? 1}
+                        onValueChange={(v: number) => setDraft(d => ({
+                            ...d,
+                            avatar: { ...d.avatar, image: { ...d.avatar!.image!, zoom: Number(v.toFixed(2)) } }
+                        }))}
+                        markers={[1, 1.5, 2, 2.5, 3]}
+                        onMarkerRender={(v: number) => `${v}×`}
                     />
                     <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
                         <Text variant="text-xs/normal">Ajuste:</Text>
@@ -1397,7 +1434,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             color={Button.Colors.PRIMARY}
                             onClick={() => setDraft(d => ({
                                 ...d,
-                                avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX: 50, positionY: 50 } }
+                                avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX: 50, positionY: 50, zoom: 1 } }
                             }))}
                         >Centrar</Button>
                     </Flex>

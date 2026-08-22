@@ -68,10 +68,26 @@ function textStyleCss(style: TextStyle): string {
     return parts.filter(Boolean).join(" ");
 }
 
+/**
+ * El valor de `background-size` para una imagen, zoom incluido.
+ *
+ * Sin ampliar, es el `fit` de siempre (`cover`/`contain`), calculado por el
+ * propio navegador contra el tamaño real del contenedor donde se pinte —
+ * exacto en cualquier sitio de la interfaz. Ampliado, cambiamos a un
+ * porcentaje del ancho del contenedor con alto automático: sigue sin
+ * depender de ningún tamaño fijo (el mismo perfil se ve en sitios de tamaños
+ * distintos), a cambio de dejar de ser un "cover" exacto — una aproximación
+ * razonable, como la del propio recorte de Discord, que tampoco es infinita.
+ */
+function imageSizeCss(img: NonNullable<BannerStyle["image"]>): string {
+    const zoom = img.zoom ?? 1;
+    return zoom > 1 ? `${Math.round(zoom * 100)}% auto` : (img.fit ?? "cover");
+}
+
 function imageCss(img: NonNullable<BannerStyle["image"]>): string {
     return [
         `background-image: url("${img.url}") !important;`,
-        `background-size: ${img.fit ?? "cover"} !important;`,
+        `background-size: ${imageSizeCss(img)} !important;`,
         `background-position: ${img.positionX ?? 50}% ${img.positionY ?? 50}% !important;`,
         "background-repeat: no-repeat;"
     ].join(" ");
@@ -93,7 +109,7 @@ function bannerCss(banner: BannerStyle): string {
         // `!important`: cuando el banner lo pinta el propio Discord (capa 1,
         // vía profileHook), su nodo trae su propio background-size/position —
         // sin esto, el encuadre elegido en el editor no ganaba el pulso.
-        parts.push(`background-size: ${banner.image.fit ?? "cover"} !important;`);
+        parts.push(`background-size: ${imageSizeCss(banner.image)} !important;`);
         parts.push(`background-position: ${banner.image.positionX ?? 50}% ${banner.image.positionY ?? 50}% !important;`);
     }
     if (banner.blur) parts.push(`filter: blur(${banner.blur}px);`);
@@ -232,6 +248,25 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
     }
 
     return out.join("\n");
+}
+
+/**
+ * CSS para avatares fuera del perfil: mensajes, lista de miembros, DMs,
+ * tarjetas de llamada. Ahí no hay una raíz de perfil que envuelva el nodo
+ * —dom.ts marca cada contenedor directamente con `data-xcord-user` y esta
+ * clase, sobre el mismo elemento—, así que el selector va sin espacio,
+ * distinto del resto del motor (que sí usa `${scope} .clase`, un
+ * antepasado-descendiente). Solo tiene sentido cuando hay foto propia: la
+ * decoración y el resto de personalizaciones no aparecen fuera del perfil.
+ */
+export function buildStandaloneAvatarCss(profile: XcordProfile): string {
+    if (!profile.avatar?.image) return "";
+
+    const selector = `[data-${NS}-user="${profile.userId}"].${NS}-avatar-standalone`;
+    return [
+        `${selector} { ${avatarCss(profile.avatar)} }`,
+        `${selector} img { visibility: hidden !important; }`
+    ].join("\n");
 }
 
 /** Keyframes globales; se inyectan una sola vez, no por perfil. */
