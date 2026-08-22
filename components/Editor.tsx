@@ -566,19 +566,21 @@ const FIT_OPTIONS = [
 ] as const;
 
 /**
- * Encuadre del banner arrastrando sobre una vista previa, igual que el
- * recorte nativo de Discord al subir un banner — salvo que aquí no se recorta
- * de verdad: solo cambia `background-position`, así que sigue funcionando con
- * GIFs animados y no hace falta reprocesar el archivo.
- *
- * La proporción 1200×468 es la que usa Discord para su propio banner.
+ * Encuadre de una imagen (banner o avatar) arrastrando sobre una vista
+ * previa, igual que el recorte nativo de Discord al subir una — salvo que
+ * aquí no se recorta de verdad: solo cambia `background-position`, así que
+ * sigue funcionando con GIFs animados y no hace falta reprocesar el archivo.
  */
-function BannerPositionPicker({ url, fit, positionX, positionY, onChange }: {
+function ImagePositionPicker({ url, fit, positionX, positionY, onChange, aspectRatio = "1200 / 468", round = false }: {
     url: string;
     fit: "cover" | "contain";
     positionX: number;
     positionY: number;
     onChange: (x: number, y: number) => void;
+    /** "1200 / 468" para el banner de Discord, "1 / 1" para el avatar. */
+    aspectRatio?: string;
+    /** El avatar es circular; la vista previa lo refleja para no elegir a ciegas. */
+    round?: boolean;
 }) {
     const [dragging, setDragging] = useState(false);
 
@@ -601,9 +603,9 @@ function BannerPositionPicker({ url, fit, positionX, positionY, onChange }: {
             onMouseUp={() => setDragging(false)}
             onMouseLeave={() => setDragging(false)}
             style={{
-                width: "100%",
-                aspectRatio: "1200 / 468",
-                borderRadius: "8px",
+                width: round ? "140px" : "100%",
+                aspectRatio,
+                borderRadius: round ? "50%" : "8px",
                 cursor: dragging ? "grabbing" : "grab",
                 backgroundImage: `url("${url}")`,
                 backgroundSize: fit,
@@ -1032,6 +1034,10 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
     // Base64 son 4 caracteres por cada 3 bytes; la cabecera es despreciable.
     const embeddedSize = isEmbedded ? Math.round(bannerUrl.length * 0.75) : 0;
 
+    const avatarUrl = draft.avatar?.image?.url ?? "";
+    const avatarIsEmbedded = avatarUrl.startsWith("data:");
+    const avatarEmbeddedSize = avatarIsEmbedded ? Math.round(avatarUrl.length * 0.75) : 0;
+
     return (
         <div>
             <Forms.FormTitle tag="h3">Fondo del perfil</Forms.FormTitle>
@@ -1249,7 +1255,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     <Text variant="text-xs/normal" className={Margins.bottom8}>
                         Arrastra para elegir qué parte del banner se ve.
                     </Text>
-                    <BannerPositionPicker
+                    <ImagePositionPicker
                         url={draft.banner.image.url}
                         fit={draft.banner.image.fit ?? "cover"}
                         positionX={draft.banner.image.positionX ?? 50}
@@ -1277,6 +1283,121 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             onClick={() => setDraft(d => ({
                                 ...d,
                                 banner: { ...d.banner, image: { ...d.banner!.image!, positionX: 50, positionY: 50 } }
+                            }))}
+                        >Centrar</Button>
+                    </Flex>
+                </div>
+            )}
+
+            <Forms.FormTitle tag="h3" className={Margins.top16}>Foto de perfil</Forms.FormTitle>
+            <Text variant="text-sm/normal">
+                Pega una URL o elige un archivo de tu equipo — igual que el banner. Reemplaza tu
+                avatar solo en clientes con xcord; tu foto real en Discord no cambia.
+            </Text>
+
+            <TextInput
+                value={avatarIsEmbedded ? "" : avatarUrl}
+                placeholder={avatarIsEmbedded ? `Archivo incrustado (${formatSize(avatarEmbeddedSize)})` : "https://…/avatar.png"}
+                onChange={(url: string) => setDraft({
+                    ...draft,
+                    avatar: url ? { ...draft.avatar, image: { ...draft.avatar?.image, url } } : { ...draft.avatar, image: undefined }
+                })}
+            />
+
+            <Flex className={Margins.top8}>
+                <Button
+                    size={Button.Sizes.SMALL}
+                    disabled={uploading}
+                    onClick={async () => {
+                        const picked = await pickImageFile(MAX_UPLOAD_BYTES);
+                        if (!picked) return;
+
+                        if (!confirm(
+                            "Se subirá tu imagen a un servidor público. Tu imagen quedará " +
+                            "accesible públicamente para quien tenga el enlace.\n\n¿Deseas continuar?"
+                        )) return;
+
+                        setUploading(true);
+                        try {
+                            const result = await Native.uploadFile(
+                                stripDataUri(picked.dataUri), picked.name, picked.type
+                            );
+
+                            if (!result.ok || !result.url)
+                                return void alert(`No se pudo subir: ${result.error}`);
+
+                            setDraft(d => ({ ...d, avatar: { ...d.avatar, image: { ...d.avatar?.image, url: result.url! } } }));
+                        } finally {
+                            setUploading(false);
+                        }
+                    }}
+                >{uploading ? "Subiendo…" : "Subir archivo…"}</Button>
+
+                <Button
+                    size={Button.Sizes.SMALL}
+                    color={Button.Colors.PRIMARY}
+                    disabled={uploading}
+                    onClick={async () => {
+                        const picked = await pickImageFile(MAX_EMBED_BYTES);
+                        if (!picked) return;
+
+                        if (picked.size > WARN_EMBED_BYTES && !confirm(
+                            `"${picked.name}" pesa ${formatSize(picked.size)}. Incrustado ocupará ` +
+                            `alrededor de ${formatSize(picked.size * 1.34)} en tus ajustes, que Vencord ` +
+                            "lee y escribe a menudo.\n\n¿Continuar de todas formas?"
+                        )) return;
+
+                        setDraft({
+                            ...draft,
+                            avatar: { ...draft.avatar, image: { ...draft.avatar?.image, url: picked.dataUri } }
+                        });
+                    }}
+                >Incrustar local…</Button>
+
+                {draft.avatar?.image && (
+                    <Button
+                        size={Button.Sizes.SMALL}
+                        color={Button.Colors.RED}
+                        onClick={() => setDraft({ ...draft, avatar: { ...draft.avatar, image: undefined } })}
+                    >Quitar foto</Button>
+                )}
+            </Flex>
+
+            {draft.avatar?.image?.url && (
+                <div className={Margins.top8}>
+                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                        Arrastra para elegir qué parte de la foto se ve.
+                    </Text>
+                    <ImagePositionPicker
+                        url={draft.avatar.image.url}
+                        fit={draft.avatar.image.fit ?? "cover"}
+                        positionX={draft.avatar.image.positionX ?? 50}
+                        positionY={draft.avatar.image.positionY ?? 50}
+                        aspectRatio="1 / 1"
+                        round
+                        onChange={(positionX, positionY) => setDraft(d => ({
+                            ...d,
+                            avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX, positionY } }
+                        }))}
+                    />
+                    <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
+                        <Text variant="text-xs/normal">Ajuste:</Text>
+                        <Select
+                            options={FIT_OPTIONS as unknown as Array<{ label: string; value: string; }>}
+                            select={(fit: string) => setDraft(d => ({
+                                ...d,
+                                avatar: { ...d.avatar, image: { ...d.avatar!.image!, fit: fit as "cover" | "contain" } }
+                            }))}
+                            isSelected={(fit: string) => fit === (draft.avatar!.image!.fit ?? "cover")}
+                            serialize={(fit: string) => fit}
+                            closeOnSelect
+                        />
+                        <Button
+                            size={Button.Sizes.SMALL}
+                            color={Button.Colors.PRIMARY}
+                            onClick={() => setDraft(d => ({
+                                ...d,
+                                avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX: 50, positionY: 50 } }
                             }))}
                         >Centrar</Button>
                     </Flex>

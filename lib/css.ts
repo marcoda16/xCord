@@ -70,9 +70,9 @@ function textStyleCss(style: TextStyle): string {
 
 function imageCss(img: NonNullable<BannerStyle["image"]>): string {
     return [
-        `background-image: url("${img.url}");`,
-        `background-size: ${img.fit ?? "cover"};`,
-        `background-position: ${img.positionX ?? 50}% ${img.positionY ?? 50}%;`,
+        `background-image: url("${img.url}") !important;`,
+        `background-size: ${img.fit ?? "cover"} !important;`,
+        `background-position: ${img.positionX ?? 50}% ${img.positionY ?? 50}% !important;`,
         "background-repeat: no-repeat;"
     ].join(" ");
 }
@@ -220,8 +220,16 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
     if (profile.banner)
         out.push(`${scope} .${NS}-banner { ${bannerCss(profile.banner)} }`);
 
-    if (profile.avatar)
+    if (profile.avatar) {
         out.push(`${scope} .${NS}-avatar { ${avatarCss(profile.avatar)} }`);
+        // El contenedor que marca dom.ts trae dentro el <img> real del avatar
+        // de Discord, opaco y por encima de lo que pintemos aquí — sin
+        // ocultarlo, el fondo de imagen que ponemos nunca llega a verse. El
+        // anillo de decoración se dibuja aparte, con ::after sobre este mismo
+        // contenedor, así que ocultar el <img> no se lo lleva por delante.
+        if (profile.avatar.image)
+            out.push(`${scope} .${NS}-avatar img { visibility: hidden !important; }`);
+    }
 
     return out.join("\n");
 }
