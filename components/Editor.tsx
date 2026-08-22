@@ -1194,9 +1194,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         if (!picked) return;
 
                         if (!confirm(
-                            `Se subirá "${picked.name}" (${formatSize(picked.size)}) a catbox.moe.\n\n` +
-                            "Quedará accesible públicamente para quien tenga el enlace, en un " +
-                            "servidor que no controlamos.\n\n¿Continuar?"
+                            "Se subirá tu imagen a un servidor público. Tu imagen quedará " +
+                            "accesible públicamente para quien tenga el enlace.\n\n¿Deseas continuar?"
                         )) return;
 
                         setUploading(true);
