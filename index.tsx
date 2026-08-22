@@ -324,6 +324,23 @@ export default definePlugin({
                     replace: "[$1,$2,$self.getXcordProfileVersion()]"
                 }
             ]
+        },
+        {
+            // La URL del avatar la arma esta única función (módulo 486020,
+            // volcado real, exportada como IconUtils.getUserAvatarURL) y la
+            // usan mensajes, lista de miembros, DMs y el propio perfil por
+            // igual — a diferencia de intentar adivinar el contenedor a
+            // pintar por CSS en cada sitio (lo que rompió el layout en un
+            // intento anterior), aquí Discord sigue siendo quien decide cómo
+            // se ve: tamaño, recorte circular, anillo de decoración, todo.
+            // `find` usa el nombre de la propiedad del objeto exportado —eso
+            // no se minifica, a diferencia de los nombres de variable— para
+            // que siga sirviendo aunque el bundle renombre R/C/etc.
+            find: "getGuildMemberAvatarURLSimple:",
+            replacement: {
+                match: /return (\i)\(e,(\i),(\i),(\i),(\i)\)\?\?(\i)\(e\.id,e\.discriminator,e\.isProvisional,\3\)\}/,
+                replace: "return $self.useXcordAvatarURL(e)??($1(e,$2,$3,$4,$5)??$6(e.id,e.discriminator,e.isProvisional,$3))}"
+            }
         }
     ],
 
@@ -340,6 +357,23 @@ export default definePlugin({
         try {
             const asset = user?.id && resolveProfile(user.id)?.avatar?.decoration?.asset;
             return asset ? { asset } : undefined;
+        } catch {
+            return undefined;
+        }
+    },
+
+    /**
+     * La URL del avatar de un usuario, si tiene uno propio puesto por xcord.
+     *
+     * Se inyecta en el punto donde Discord arma la URL de verdad —módulo
+     * 486020, `getUserAvatarURL`—, así que a partir de ahí lo renderiza su
+     * propio código: mismo tamaño, mismo recorte circular, mismo anillo de
+     * decoración encima, en cualquier sitio de la interfaz que llame a esa
+     * función. Ningún hack de CSS adivinando contenedores.
+     */
+    useXcordAvatarURL(user?: { id?: string; }): string | undefined {
+        try {
+            return (user?.id && resolveProfile(user.id)?.avatar?.image?.url) || undefined;
         } catch {
             return undefined;
         }
