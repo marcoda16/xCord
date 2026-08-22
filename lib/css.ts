@@ -240,33 +240,22 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
         out.push(`${scope} .${NS}-avatar { ${avatarCss(profile.avatar)} }`);
         // El contenedor que marca dom.ts trae dentro el <img> real del avatar
         // de Discord, opaco y por encima de lo que pintemos aquí — sin
-        // ocultarlo, el fondo de imagen que ponemos nunca llega a verse. El
-        // anillo de decoración se dibuja aparte, con ::after sobre este mismo
-        // contenedor, así que ocultar el <img> no se lo lleva por delante.
+        // ocultarlo, el fondo de imagen que ponemos nunca llega a verse.
+        //
+        // Apuntamos solo al <img> cuya URL es la foto real (mismo patrón que
+        // usa dom.ts para identificarla), no a cualquier <img> del
+        // contenedor: el anillo de decoración puede pintarse como imagen
+        // aparte en algunos sitios, con una URL de otro dominio
+        // (avatar-decoration-presets), y un selector genérico se lo llevaba
+        // por delante junto con el avatar.
         if (profile.avatar.image)
-            out.push(`${scope} .${NS}-avatar img { visibility: hidden !important; }`);
+            out.push(
+                `${scope} .${NS}-avatar img[src*="/avatars/"], ` +
+                `${scope} .${NS}-avatar img[src*="/guilds/"] { visibility: hidden !important; }`
+            );
     }
 
     return out.join("\n");
-}
-
-/**
- * CSS para avatares fuera del perfil: mensajes, lista de miembros, DMs,
- * tarjetas de llamada. Ahí no hay una raíz de perfil que envuelva el nodo
- * —dom.ts marca cada contenedor directamente con `data-xcord-user` y esta
- * clase, sobre el mismo elemento—, así que el selector va sin espacio,
- * distinto del resto del motor (que sí usa `${scope} .clase`, un
- * antepasado-descendiente). Solo tiene sentido cuando hay foto propia: la
- * decoración y el resto de personalizaciones no aparecen fuera del perfil.
- */
-export function buildStandaloneAvatarCss(profile: XcordProfile): string {
-    if (!profile.avatar?.image) return "";
-
-    const selector = `[data-${NS}-user="${profile.userId}"].${NS}-avatar-standalone`;
-    return [
-        `${selector} { ${avatarCss(profile.avatar)} }`,
-        `${selector} img { visibility: hidden !important; }`
-    ].join("\n");
 }
 
 /** Keyframes globales; se inyectan una sola vez, no por perfil. */

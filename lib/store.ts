@@ -8,7 +8,7 @@
 
 import type { PluginNative } from "@utils/types";
 
-import { buildProfileCss, buildStandaloneAvatarCss, GLOBAL_KEYFRAMES, NS } from "./css";
+import { buildProfileCss, GLOBAL_KEYFRAMES, NS } from "./css";
 import { type XcordProfile, SCHEMA_VERSION } from "../types";
 
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("../native")>;
@@ -83,10 +83,7 @@ function flush() {
 /** Aplica (o reemplaza) los estilos de un usuario en el documento. */
 export function applyProfile(profile: XcordProfile) {
     const scope = `[data-${NS}-user="${profile.userId}"]`;
-    // El avatar "suelto" (mensajes, lista de miembros, DMs) es solo de la
-    // capa real: no hay preview fuera de la tarjeta de perfil que editas.
-    const css = buildProfileCss(profile, scope) + "\n" + buildStandaloneAvatarCss(profile);
-    injected.set(profile.userId, css);
+    injected.set(profile.userId, buildProfileCss(profile, scope));
     flush();
 }
 
