@@ -341,6 +341,22 @@ export default definePlugin({
                 match: /return (\i)\(e,(\i),(\i),(\i),(\i)\)\?\?(\i)\(e\.id,e\.discriminator,e\.isProvisional,\3\)\}/,
                 replace: "return $self.useXcordAvatarURL(e)??($1(e,$2,$3,$4,$5)??$6(e.id,e.discriminator,e.isProvisional,$3))}"
             }
+        },
+        {
+            // Hermano del patch de arriba, mismo módulo: el popout compacto
+            // que se ve al pasar el mouse por alguien DENTRO de un servidor
+            // no lee el banner del perfil (capa 1, arriba) sino este otro
+            // endpoint — "banner de miembro" — que espera un hash y arma la
+            // URL él mismo. Con nuestro banner (una URL completa, no un
+            // hash) ahí dentro, construye una URL sin sentido que Discord no
+            // puede cargar — confirmado viendo la petición fallida en la
+            // pestaña Network. Mismo arreglo: adelantarse y devolver la URL
+            // completa tal cual cuando hay una puesta por xcord.
+            find: "getGuildMemberBannerURL:",
+            replacement: {
+                match: /function (\i)\(e\)\{let t,\{id:(\i),guildId:(\i),banner:(\i),canAnimate:(\i),size:(\i)\}=e;if\(null==\4\|\|null==\3\)return;/,
+                replace: "function $1(e){const x=$self.useXcordBannerURL(e);if(x)return x;let t,{id:$2,guildId:$3,banner:$4,canAnimate:$5,size:$6}=e;if(null==$4||null==$3)return;"
+            }
         }
     ],
 
@@ -374,6 +390,23 @@ export default definePlugin({
     useXcordAvatarURL(user?: { id?: string; }): string | undefined {
         try {
             return (user?.id && resolveProfile(user.id)?.avatar?.image?.url) || undefined;
+        } catch {
+            return undefined;
+        }
+    },
+
+    /**
+     * La URL del banner "de servidor" de un usuario, si tiene uno propio
+     * puesto por xcord. Distinto del banner del modal de perfil —ese ya lo
+     * cubre `profileHook`, escribiendo directo el campo `banner`—: este es
+     * el endpoint que arma el popout compacto dentro de un servidor, que
+     * espera un hash y construye la URL él mismo. Sin este override, nuestra
+     * URL completa entraba ahí como si fuera un hash y salía una URL sin
+     * sentido — confirmado viendo la petición fallida en Network.
+     */
+    useXcordBannerURL(user?: { id?: string; }): string | undefined {
+        try {
+            return (user?.id && resolveProfile(user.id)?.banner?.image?.url) || undefined;
         } catch {
             return undefined;
         }
