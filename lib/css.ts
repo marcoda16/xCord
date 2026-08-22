@@ -1,0 +1,237 @@
+/**
+ * Motor de CSS: convierte un XcordProfile en una hoja de estilos.
+ *
+ * El mismo generador alimenta la capa real y el preview del editor. Si el
+ * preview y el perfil real divergen alguna vez, es un bug aquí, no en dos
+ * implementaciones distintas que se fueron separando.
+ */
+
+import type { AvatarStyle, BannerStyle, Fill, FontDefinition, TextStyle, XcordProfile } from "../types";
+
+/** Prefijo de todas las clases y variables que inyectamos, para no chocar con Discord. */
+export const NS = "xcord";
+
+function fillToCss(fill: Fill): string {
+    switch (fill.kind) {
+        case "solid":
+            return fill.color;
+        case "linear":
+            return `linear-gradient(${fill.angle}deg, ${fill.stops.join(", ")})`;
+        case "conic":
+            // Repetimos el primer stop al final para que el arcoíris cierre sin costura.
+            return `conic-gradient(${[...fill.stops, fill.stops[0]].join(", ")})`;
+    }
+}
+
+/** Un fill sólido puede pintarse con `color`; un degradado necesita recorte de fondo. */
+function isGradient(fill: Fill): boolean {
+    return fill.kind !== "solid";
+}
+
+function textEffectCss(style: TextStyle): string {
+    const speed = style.animationSpeed ?? 4;
+    const glow = style.fill.kind === "solid" ? style.fill.color : style.fill.stops[0];
+
+    switch (style.effect) {
+        case "none":
+            return "";
+        case "neon":
+            // drop-shadow en vez de text-shadow: respeta el recorte del degradado.
+            return `filter: drop-shadow(0 0 2px ${glow}) drop-shadow(0 0 8px ${glow});`;
+        case "outline":
+            return `-webkit-text-stroke: 1px ${glow}; color: transparent;`;
+        case "chrome":
+            return "background-image: linear-gradient(180deg, #fff 0%, #a8b3c4 45%, #5c6470 50%, #e8eef7 100%);";
+        case "shadow":
+            return `filter: drop-shadow(2px 2px 0 rgba(0,0,0,.6));`;
+        case "animated":
+            return `background-size: 300% 100%; animation: ${NS}-slide ${speed}s linear infinite;`;
+    }
+}
+
+function textStyleCss(style: TextStyle): string {
+    const parts: string[] = [];
+
+    if (style.fontFamily)
+        parts.push(`font-family: "${style.fontFamily}", var(--font-display), sans-serif;`);
+
+    if (isGradient(style.fill)) {
+        // El texto se vuelve una máscara sobre el degradado.
+        parts.push(`background-image: ${fillToCss(style.fill)};`);
+        parts.push("-webkit-background-clip: text; background-clip: text;");
+        parts.push("color: transparent; -webkit-text-fill-color: transparent;");
+    } else {
+        parts.push(`color: ${fillToCss(style.fill)};`);
+    }
+
+    parts.push(textEffectCss(style));
+    return parts.filter(Boolean).join(" ");
+}
+
+function imageCss(img: NonNullable<BannerStyle["image"]>): string {
+    return [
+        `background-image: url("${img.url}");`,
+        `background-size: ${img.fit ?? "cover"};`,
+        `background-position: ${img.positionX ?? 50}% ${img.positionY ?? 50}%;`,
+        "background-repeat: no-repeat;"
+    ].join(" ");
+}
+
+function bannerCss(banner: BannerStyle): string {
+    const layers: string[] = [];
+    const parts: string[] = [];
+
+    if (banner.tint)
+        layers.push(`linear-gradient(${hexToRgba(banner.tint.color, banner.tint.opacity)}, ${hexToRgba(banner.tint.color, banner.tint.opacity)})`);
+    if (banner.image)
+        layers.push(`url("${banner.image.url}")`);
+    if (banner.fill)
+        layers.push(fillToCss(banner.fill));
+
+    if (layers.length) parts.push(`background-image: ${layers.join(", ")} !important;`);
+    if (banner.image) {
+        parts.push(`background-size: ${banner.image.fit ?? "cover"};`);
+        parts.push(`background-position: ${banner.image.positionX ?? 50}% ${banner.image.positionY ?? 50}%;`);
+    }
+    if (banner.blur) parts.push(`filter: blur(${banner.blur}px);`);
+
+    return parts.join(" ");
+}
+
+function avatarCss(avatar: AvatarStyle): string {
+    if (!avatar.image) return "";
+    return `${imageCss(avatar.image)} background-color: transparent;`;
+}
+
+/**
+ * La capa ampliada y desenfocada detrás de la columna derecha del perfil.
+ *
+ * Sin configurar, reproducimos lo que hace Discord: reflejar el banner. Eso ya
+ * funciona solo cuando el banner es una URL, porque él lo pinta; aquí importa
+ * para los casos que no ve — un banner incrustado como data-URI, o un perfil
+ * con degradado y sin banner.
+ *
+ * Configurado, manda el usuario.
+ */
+function dynamicBackgroundCss(profile: XcordProfile, scope: string): string {
+    const config = profile.dynamicBackground;
+    const bannerUrl = profile.banner?.image?.url;
+
+    // Qué se pinta: lo elegido, o el mejor sustituto disponible.
+    const useFill = config?.source === "fill" ? config.fill : undefined;
+    const image = !useFill && bannerUrl ? bannerUrl : undefined;
+    const fill = useFill ?? (image ? undefined : profile.background?.fill);
+
+    if (!image && !fill) return "";
+
+    const parts: string[] = [];
+
+    if (image) {
+        parts.push(`background-image: url("${image}") !important;`);
+        parts.push("background-size: cover; background-position: center;");
+    } else {
+        parts.push(`background-image: ${fillToCss(fill!)} !important;`);
+    }
+
+    if (config) {
+        parts.push(`opacity: ${config.opacity};`);
+        // El desenfoque difumina también los bordes y los vuelve transparentes.
+        // La ampliación los empuja fuera del área visible; sin ella se ve un
+        // halo del fondo alrededor de la capa.
+        if (config.blur > 0) {
+            parts.push(`filter: blur(${config.blur}px);`);
+            // Desenfocar un GIF obliga a recalcular el desenfoque en cada
+            // fotograma. `contain: paint` le dice al navegador que nada de esta
+            // capa afecta al exterior, así que puede repintarla aislada en vez
+            // de rehacer la zona entera del perfil.
+            parts.push("contain: paint; will-change: filter;");
+        }
+        if (config.scale !== 1) parts.push(`transform: scale(${config.scale});`);
+    }
+
+    return `${scope} .${NS}-dynamic-bg { ${parts.join(" ")} }`;
+}
+
+/**
+ * Los dos colores que Discord usa para el tema de perfil, como enteros.
+ *
+ * Discord solo entiende primario + acento, y pinta el degradado él mismo. Es
+ * menos expresivo que nuestro `Fill` (sin ángulo, sin tres paradas, sin cónico)
+ * pero se renderiza en todas partes y sin pelear contra su CSS. Cogemos las dos
+ * primeras paradas; un color plano usa el mismo en ambas.
+ */
+export function fillToThemeColors(fill: Fill): [number, number] {
+    const stops = fill.kind === "solid" ? [fill.color] : fill.stops;
+    const toInt = (hex: string) => parseInt(hex.replace("#", ""), 16) || 0;
+    return [toInt(stops[0]), toInt(stops[1] ?? stops[0])];
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+    const h = hex.replace("#", "");
+    const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+    const n = parseInt(full, 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function fontFaces(fonts: FontDefinition[]): string {
+    return fonts
+        .map(f => `@font-face { font-family: "${f.family}"; src: url("${f.src}"); font-display: swap; }`)
+        .join("\n");
+}
+
+/**
+ * Genera la hoja de estilos de un perfil.
+ *
+ * `scope` acota las reglas: en la capa real es `[data-xcord-user="<id>"]`, en el
+ * preview del editor es la clase del contenedor. Nada se filtra fuera de ahí.
+ */
+export function buildProfileCss(profile: XcordProfile, scope: string): string {
+    const out: string[] = [];
+
+    if (profile.fonts?.length) out.push(fontFaces(profile.fonts));
+
+    // El color del fondo lo pinta Discord con el tema nativo (ver profileHook);
+    // aquí solo lo atenuamos. Un box-shadow interior gigante cubre todo el
+    // elemento por encima de su fondo pero por debajo del texto, así que oscurece
+    // sin tocar la legibilidad ni pelear con el degradado de Discord.
+    if (profile.background?.dim) {
+        out.push(
+            `${scope} .${NS}-bg {`,
+            `box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, ${profile.background.dim}); }`
+        );
+    }
+
+    // Fondo dinámico: la copia ampliada y desenfocada que Discord pinta detrás
+    // de la columna derecha del perfil v2. Él la alimenta con la URL del banner,
+    // así que con un banner por URL ya funciona solo. Aquí cubrimos lo que él no
+    // puede ver: un banner incrustado como data-URI, o un perfil sin banner que
+    // solo tiene degradado.
+    out.push(dynamicBackgroundCss(profile, scope));
+
+    if (profile.displayName)
+        out.push(`${scope} .${NS}-display-name { ${textStyleCss(profile.displayName)} }`);
+    if (profile.messageName)
+        out.push(`${scope} .${NS}-message-name { ${textStyleCss(profile.messageName)} }`);
+    if (profile.bio)
+        out.push(`${scope} .${NS}-bio { ${textStyleCss(profile.bio)} }`);
+    if (profile.banner)
+        out.push(`${scope} .${NS}-banner { ${bannerCss(profile.banner)} }`);
+
+    if (profile.avatar)
+        out.push(`${scope} .${NS}-avatar { ${avatarCss(profile.avatar)} }`);
+
+    return out.join("\n");
+}
+
+/** Keyframes globales; se inyectan una sola vez, no por perfil. */
+export const GLOBAL_KEYFRAMES = `
+@keyframes ${NS}-slide {
+    from { background-position: 0% 50%; }
+    to   { background-position: 300% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .${NS}-display-name, .${NS}-message-name, .${NS}-bio {
+        animation: none !important;
+    }
+}
+`;
