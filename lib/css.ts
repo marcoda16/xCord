@@ -90,8 +90,11 @@ function bannerCss(banner: BannerStyle): string {
 
     if (layers.length) parts.push(`background-image: ${layers.join(", ")} !important;`);
     if (banner.image) {
-        parts.push(`background-size: ${banner.image.fit ?? "cover"};`);
-        parts.push(`background-position: ${banner.image.positionX ?? 50}% ${banner.image.positionY ?? 50}%;`);
+        // `!important`: cuando el banner lo pinta el propio Discord (capa 1,
+        // vía profileHook), su nodo trae su propio background-size/position —
+        // sin esto, el encuadre elegido en el editor no ganaba el pulso.
+        parts.push(`background-size: ${banner.image.fit ?? "cover"} !important;`);
+        parts.push(`background-position: ${banner.image.positionX ?? 50}% ${banner.image.positionY ?? 50}% !important;`);
     }
     if (banner.blur) parts.push(`filter: blur(${banner.blur}px);`);
 

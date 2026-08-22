@@ -560,6 +560,79 @@ function stripDataUri(dataUri: string): string {
     return dataUri.slice(dataUri.indexOf(",") + 1);
 }
 
+const FIT_OPTIONS = [
+    { label: "Rellenar (recorta lo que sobre)", value: "cover" },
+    { label: "Ajustar completo (puede dejar franjas)", value: "contain" }
+] as const;
+
+/**
+ * Encuadre del banner arrastrando sobre una vista previa, igual que el
+ * recorte nativo de Discord al subir un banner — salvo que aquí no se recorta
+ * de verdad: solo cambia `background-position`, así que sigue funcionando con
+ * GIFs animados y no hace falta reprocesar el archivo.
+ *
+ * La proporción 1200×468 es la que usa Discord para su propio banner.
+ */
+function BannerPositionPicker({ url, fit, positionX, positionY, onChange }: {
+    url: string;
+    fit: "cover" | "contain";
+    positionX: number;
+    positionY: number;
+    onChange: (x: number, y: number) => void;
+}) {
+    const [dragging, setDragging] = useState(false);
+
+    const updateFromEvent = (el: HTMLElement, clientX: number, clientY: number) => {
+        const rect = el.getBoundingClientRect();
+        const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+        const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
+        onChange(Math.round(x), Math.round(y));
+    };
+
+    return (
+        <div
+            onMouseDown={e => {
+                setDragging(true);
+                updateFromEvent(e.currentTarget, e.clientX, e.clientY);
+            }}
+            onMouseMove={e => {
+                if (dragging) updateFromEvent(e.currentTarget, e.clientX, e.clientY);
+            }}
+            onMouseUp={() => setDragging(false)}
+            onMouseLeave={() => setDragging(false)}
+            style={{
+                width: "100%",
+                aspectRatio: "1200 / 468",
+                borderRadius: "8px",
+                cursor: dragging ? "grabbing" : "grab",
+                backgroundImage: `url("${url}")`,
+                backgroundSize: fit,
+                backgroundPosition: `${positionX}% ${positionY}%`,
+                backgroundRepeat: "no-repeat",
+                backgroundColor: "var(--background-secondary)",
+                border: "1px solid var(--background-modifier-accent)",
+                position: "relative",
+                userSelect: "none"
+            }}
+        >
+            <div
+                style={{
+                    position: "absolute",
+                    left: `${positionX}%`,
+                    top: `${positionY}%`,
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "50%",
+                    background: "var(--brand-500)",
+                    border: "2px solid white",
+                    transform: "translate(-50%, -50%)",
+                    pointerEvents: "none"
+                }}
+            />
+        </div>
+    );
+}
+
 /** Los cuatro ángulos que la gente usa el 90% del tiempo. */
 const ANGLE_PRESETS = [
     { label: "↓ Arriba abajo", value: 180 },
@@ -1108,7 +1181,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 placeholder={isEmbedded ? `Archivo incrustado (${formatSize(embeddedSize)})` : "https://…/banner.gif"}
                 onChange={(url: string) => setDraft({
                     ...draft,
-                    banner: url ? { ...draft.banner, image: { url } } : undefined
+                    banner: url ? { ...draft.banner, image: { ...draft.banner?.image, url } } : undefined
                 })}
             />
 
@@ -1135,7 +1208,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             if (!result.ok || !result.url)
                                 return void alert(`No se pudo subir: ${result.error}`);
 
-                            setDraft(d => ({ ...d, banner: { ...d.banner, image: { url: result.url! } } }));
+                            setDraft(d => ({ ...d, banner: { ...d.banner, image: { ...d.banner?.image, url: result.url! } } }));
                         } finally {
                             setUploading(false);
                         }
@@ -1158,7 +1231,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
                         setDraft({
                             ...draft,
-                            banner: { ...draft.banner, image: { url: picked.dataUri } }
+                            banner: { ...draft.banner, image: { ...draft.banner?.image, url: picked.dataUri } }
                         });
                     }}
                 >Incrustar local…</Button>
@@ -1171,6 +1244,45 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     >Quitar banner</Button>
                 )}
             </Flex>
+
+            {draft.banner?.image?.url && (
+                <div className={Margins.top8}>
+                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                        Arrastra para elegir qué parte del banner se ve.
+                    </Text>
+                    <BannerPositionPicker
+                        url={draft.banner.image.url}
+                        fit={draft.banner.image.fit ?? "cover"}
+                        positionX={draft.banner.image.positionX ?? 50}
+                        positionY={draft.banner.image.positionY ?? 50}
+                        onChange={(positionX, positionY) => setDraft(d => ({
+                            ...d,
+                            banner: { ...d.banner, image: { ...d.banner!.image!, positionX, positionY } }
+                        }))}
+                    />
+                    <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
+                        <Text variant="text-xs/normal">Ajuste:</Text>
+                        <Select
+                            options={FIT_OPTIONS as unknown as Array<{ label: string; value: string; }>}
+                            select={(fit: string) => setDraft(d => ({
+                                ...d,
+                                banner: { ...d.banner, image: { ...d.banner!.image!, fit: fit as "cover" | "contain" } }
+                            }))}
+                            isSelected={(fit: string) => fit === (draft.banner!.image!.fit ?? "cover")}
+                            serialize={(fit: string) => fit}
+                            closeOnSelect
+                        />
+                        <Button
+                            size={Button.Sizes.SMALL}
+                            color={Button.Colors.PRIMARY}
+                            onClick={() => setDraft(d => ({
+                                ...d,
+                                banner: { ...d.banner, image: { ...d.banner!.image!, positionX: 50, positionY: 50 } }
+                            }))}
+                        >Centrar</Button>
+                    </Flex>
+                </div>
+            )}
 
             <Forms.FormTitle tag="h3" className={Margins.top16}>Tienda</Forms.FormTitle>
             <Text variant="text-sm/normal">
