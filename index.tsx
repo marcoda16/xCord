@@ -22,6 +22,7 @@ import { definePluginSettings } from "@api/Settings";
 import { Devs } from "@utils/constants";
 import definePlugin, { OptionType, type PluginNative } from "@utils/types";
 import type { UserProfile } from "@vencord/discord-types";
+import { findStoreLazy } from "@webpack";
 import { UserStore } from "@webpack/common";
 import virtualMerge from "virtual-merge";
 
@@ -38,6 +39,9 @@ import { setBorderResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("./native")>;
+
+/** Para no animar nada si el usuario pidió reducir el movimiento. */
+const AccessibilityStore = findStoreLazy("AccessibilityStore");
 
 const settings = definePluginSettings({
     ownProfile: {
@@ -281,10 +285,27 @@ export default definePlugin({
             // código real del módulo 789543. `avatarWithPopoutRef` es un ancla
             // que solo aparece ahí, para no tocar otros sitios por accidente.
             find: "avatarWithPopoutRef",
-            replacement: {
-                match: /(\i)\?\.avatarDecoration(?=,)/,
-                replace: "($self.useXcordAvatarDecoration($1)??$1?.avatarDecoration)"
-            }
+            replacement: [
+                {
+                    match: /(\i)\?\.avatarDecoration(?=,)/,
+                    replace: "($self.useXcordAvatarDecoration($1)??$1?.avatarDecoration)"
+                },
+                {
+                    // Este panel llama a `getAvatarDecorationURL` sin pasarle
+                    // `canAnimate`, y el valor por defecto de esa función es
+                    // `false` — de ahí que el anillo salga siempre con
+                    // `passthrough=false`, congelado, ni siquiera al pasar el
+                    // mouse. Es cosa del propio Discord, no un efecto de los
+                    // otros parches: lo verificamos leyendo el `src` real de la
+                    // imagen mientras se sondeaba el estado cada segundo.
+                    //
+                    // Le inyectamos el parámetro que falta. Se consulta
+                    // "reducir movimiento" para no pasar por encima de esa
+                    // preferencia de accesibilidad.
+                    match: /\{avatarDecoration:(\i),size:(\(0,\i\.\i\)\(\i\.\i\.SIZE_32\))\}/,
+                    replace: "{avatarDecoration:$1,canAnimate:$self.xcordShouldAnimate(),size:$2}"
+                }
+            ]
         },
         {
             // La placa de nombre (nameplate) tampoco tiene override: se lee
@@ -439,6 +460,21 @@ export default definePlugin({
      */
     xcordDirectImage(value?: string): string | undefined {
         return typeof value === "string" && /^(https?:|data:)/.test(value) ? value : undefined;
+    },
+
+    /**
+     * Si toca animar una decoración que Discord pinta estática por omisión.
+     *
+     * Solo se usa donde inyectamos un `canAnimate` que él no pasaba. Respeta
+     * "reducir movimiento": con esa preferencia activa seguimos devolviendo
+     * la versión congelada, que es justo lo que pide quien la activa.
+     */
+    xcordShouldAnimate(): boolean {
+        try {
+            return !AccessibilityStore?.useReducedMotion;
+        } catch {
+            return true;
+        }
     },
 
     /**
