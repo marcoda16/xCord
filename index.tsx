@@ -357,6 +357,23 @@ export default definePlugin({
                 match: /function (\i)\(e\)\{let t,\{id:(\i),guildId:(\i),banner:(\i),canAnimate:(\i),size:(\i)\}=e;if\(null==\4\|\|null==\3\)return;/,
                 replace: "function $1(e){const x=$self.useXcordBannerURL(e);if(x)return x;let t,{id:$2,guildId:$3,banner:$4,canAnimate:$5,size:$6}=e;if(null==$4||null==$3)return;"
             }
+        },
+        {
+            // Y una tercera: el popout compacto termina llamando a
+            // `getUserBannerURL`, que arma `/banners/<id>/<hash>` — distinta
+            // de la de miembro de servidor, de ahí que el arreglo anterior no
+            // lo cubriera. Las dos URLs fallidas que vimos en Network eran de
+            // funciones diferentes; esta es la del segundo intento.
+            //
+            // Aquí no consultamos el perfil: basta con mirar el propio valor.
+            // Si lo que llega como "hash" ya es una URL completa, es nuestro
+            // —lo escribió profileHook en el campo `banner`— y hay que
+            // devolverlo tal cual en vez de empotrarlo en la plantilla del CDN.
+            find: "getUserBannerURL:",
+            replacement: {
+                match: /function (\i)\(e\)\{let t,\{id:(\i),banner:(\i),canAnimate:(\i),size:(\i)\}=e;if\(null==\3\)return;/,
+                replace: "function $1(e){const x=$self.xcordDirectImage(e.banner);if(x)return x;let t,{id:$2,banner:$3,canAnimate:$4,size:$5}=e;if(null==$3)return;"
+            }
         }
     ],
 
@@ -410,6 +427,18 @@ export default definePlugin({
         } catch {
             return undefined;
         }
+    },
+
+    /**
+     * Una imagen que ya viene resuelta, no como hash del CDN de Discord.
+     *
+     * Las funciones de `IconUtils` esperan un hash corto y construyen la URL
+     * ellas mismas; nuestras imágenes ya son URLs completas (o data-URIs).
+     * Mirar el valor en vez de consultar el perfil hace esto independiente
+     * de la caché: si parece una URL, no hay nada que construir.
+     */
+    xcordDirectImage(value?: string): string | undefined {
+        return typeof value === "string" && /^(https?:|data:)/.test(value) ? value : undefined;
     },
 
     /**
