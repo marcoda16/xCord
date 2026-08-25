@@ -60,7 +60,13 @@ Client ID de la app de Discord (público): `1540619781378539601`. Redirect URI r
 
 ## Instalación (para probar el plugin)
 
-Requiere [Vencord clonado y compilando desde fuente](https://docs.vencord.dev/installing/):
+**La forma fácil (Windows):** descarga [`install.bat`](install.bat) y hazle doble clic. Instala
+pnpm si falta, clona Vencord y xcord (o los actualiza si ya los tenías), compila e inyecta —
+solo hace falta tener [Git](https://git-scm.com/download/win) y
+[Node.js](https://nodejs.org) instalados de antes (si no los tienes, el script te manda a
+descargarlos y te pide que lo vuelvas a correr).
+
+**A mano:** requiere [Vencord clonado y compilando desde fuente](https://docs.vencord.dev/installing/):
 
 ```bash
 git clone https://github.com/Vendicated/Vencord
