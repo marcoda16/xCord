@@ -29,14 +29,23 @@ function isGradient(fill: Fill): boolean {
 }
 
 /**
- * La misma paleta del usuario, pero cerrada en ciclo: el primer color
- * repetido al final. Es lo que hace posible un desplazamiento infinito sin
- * costura — ver el comentario en `textEffectCss`, caso "animated".
+ * La misma paleta del usuario, pero como dos vueltas idénticas seguidas —
+ * cada una cerrada en ciclo (el primer color repetido al final). Es lo que
+ * hace posible un desplazamiento infinito sin salto al reiniciar.
+ *
+ * Con solo UNA vuelta cerrada y el fondo estirado al 200%, la mitad que se
+ * ve al empezar (0%–100% del fondo) y la que se ve al terminar (100%–200%)
+ * no son la misma imagen — son dos mitades distintas de un mismo degradado
+ * más largo, así que el reinicio del `infinite` daba un salto visible.
+ * Repitiendo la vuelta completa dos veces, cada mitad del fondo estirado es
+ * una copia idéntica de la otra: el fotograma final y el inicial coinciden
+ * píxel a píxel, y el reinicio deja de notarse.
  */
 function closedLoopGradient(fill: Fill): string {
     if (fill.kind === "solid") return `linear-gradient(90deg, ${fill.color}, ${fill.color})`;
     if (fill.kind === "conic") return fillToCss(fill); // el cónico ya cierra su propio ciclo.
-    return `linear-gradient(${fill.angle}deg, ${[...fill.stops, fill.stops[0]].join(", ")})`;
+    const loop = [...fill.stops, fill.stops[0]];
+    return `linear-gradient(${fill.angle}deg, ${[...loop, ...loop].join(", ")})`;
 }
 
 function textEffectCss(style: TextStyle): string {
