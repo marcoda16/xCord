@@ -29,23 +29,43 @@ function isGradient(fill: Fill): boolean {
 }
 
 /**
- * La misma paleta del usuario, pero como dos vueltas idénticas seguidas —
- * cada una cerrada en ciclo (el primer color repetido al final). Es lo que
- * hace posible un desplazamiento infinito sin salto al reiniciar.
+ * La misma paleta del usuario, pero como dos vueltas idénticas seguidas, con
+ * posiciones explícitas en cada color — no las que el navegador reparte
+ * solo. Es lo que hace posible un desplazamiento infinito sin salto al
+ * reiniciar: N colores → un ciclo completo en el primer 50% del degradado →
+ * el mismo ciclo repetido en el segundo 50%. El color de cierre de cada
+ * mitad (a 50% y a 100%) es siempre el primero de la paleta, así que la
+ * mitad que se ve al empezar la animación y la que se ve al terminarla son
+ * la misma imagen, píxel a píxel.
  *
- * Con solo UNA vuelta cerrada y el fondo estirado al 200%, la mitad que se
- * ve al empezar (0%–100% del fondo) y la que se ve al terminar (100%–200%)
- * no son la misma imagen — son dos mitades distintas de un mismo degradado
- * más largo, así que el reinicio del `infinite` daba un salto visible.
- * Repitiendo la vuelta completa dos veces, cada mitad del fondo estirado es
- * una copia idéntica de la otra: el fotograma final y el inicial coinciden
- * píxel a píxel, y el reinicio deja de notarse.
+ * Con posiciones explícitas en vez de fiarnos del reparto automático, el
+ * punto exacto del reinicio no depende de que el navegador distribuya los
+ * stops como esperábamos — está garantizado por número, no por suposición.
+ *
+ * También devuelve el eje: un degradado vertical (0°/180°) necesita
+ * estirarse y desplazarse en Y, no en X, o el desplazamiento no tiene nada
+ * que ver con la dirección real del degradado — ahí es donde el reinicio
+ * volvía a notarse aunque el color ya cerrara bien el ciclo. Un ángulo en
+ * diagonal no tiene una solución perfecta con solo `background-position`;
+ * se aproxima por el eje horizontal, que es el que domina en un texto ancho.
  */
-function closedLoopGradient(fill: Fill): string {
-    if (fill.kind === "solid") return `linear-gradient(90deg, ${fill.color}, ${fill.color})`;
-    if (fill.kind === "conic") return fillToCss(fill); // el cónico ya cierra su propio ciclo.
-    const loop = [...fill.stops, fill.stops[0]];
-    return `linear-gradient(${fill.angle}deg, ${[...loop, ...loop].join(", ")})`;
+function closedLoopGradient(fill: Fill): { image: string; axis: "x" | "y"; } {
+    if (fill.kind === "solid")
+        return { image: `linear-gradient(90deg, ${fill.color}, ${fill.color})`, axis: "x" };
+    if (fill.kind === "conic")
+        return { image: fillToCss(fill), axis: "x" }; // el cónico ya cierra su propio ciclo.
+
+    const n = fill.stops.length;
+    const points: string[] = [];
+    for (let i = 0; i <= 2 * n; i++) {
+        const pct = (i / (2 * n)) * 100;
+        points.push(`${fill.stops[i % n]} ${pct.toFixed(4)}%`);
+    }
+
+    const normalized = ((fill.angle % 360) + 360) % 360;
+    const axis: "x" | "y" = normalized === 0 || normalized === 180 ? "y" : "x";
+
+    return { image: `linear-gradient(${fill.angle}deg, ${points.join(", ")})`, axis };
 }
 
 function textEffectCss(style: TextStyle): string {
@@ -64,17 +84,13 @@ function textEffectCss(style: TextStyle): string {
             return "background-image: linear-gradient(180deg, #fff 0%, #a8b3c4 45%, #5c6470 50%, #e8eef7 100%);";
         case "shadow":
             return `filter: drop-shadow(2px 2px 0 rgba(0,0,0,.6));`;
-        case "animated":
-            // Truco para que el loop no dé un salto al reiniciar: repetimos
-            // el primer color al final (closedLoopGradient) y estiramos el
-            // fondo al doble (200%) del elemento. Así la mitad visible al
-            // empezar (0%–100% del fondo estirado) es justo la paleta
-            // original, y la mitad que se ve al terminar (100%–200%) es esa
-            // misma paleta invertida de vuelta al primer color — el fin de
-            // una vuelta y el principio de la siguiente son visualmente
-            // idénticos, así que el reinicio del `infinite` no se nota.
-            return `background-image: ${closedLoopGradient(style.fill)} !important; ` +
-                `background-size: 200% 100%; animation: ${NS}-slide ${speed}s linear infinite;`;
+        case "animated": {
+            const { image, axis } = closedLoopGradient(style.fill);
+            const size = axis === "x" ? "200% 100%" : "100% 200%";
+            const anim = axis === "x" ? `${NS}-slide-x` : `${NS}-slide-y`;
+            return `background-image: ${image} !important; ` +
+                `background-size: ${size}; animation: ${anim} ${speed}s linear infinite;`;
+        }
     }
 }
 
@@ -289,9 +305,13 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
 
 /** Keyframes globales; se inyectan una sola vez, no por perfil. */
 export const GLOBAL_KEYFRAMES = `
-@keyframes ${NS}-slide {
+@keyframes ${NS}-slide-x {
     from { background-position: 0% 50%; }
     to   { background-position: 100% 50%; }
+}
+@keyframes ${NS}-slide-y {
+    from { background-position: 50% 0%; }
+    to   { background-position: 50% 100%; }
 }
 /*
  * Antes esto miraba "@media (prefers-reduced-motion: reduce)" — la
