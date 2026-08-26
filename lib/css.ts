@@ -28,6 +28,17 @@ function isGradient(fill: Fill): boolean {
     return fill.kind !== "solid";
 }
 
+/**
+ * La misma paleta del usuario, pero cerrada en ciclo: el primer color
+ * repetido al final. Es lo que hace posible un desplazamiento infinito sin
+ * costura — ver el comentario en `textEffectCss`, caso "animated".
+ */
+function closedLoopGradient(fill: Fill): string {
+    if (fill.kind === "solid") return `linear-gradient(90deg, ${fill.color}, ${fill.color})`;
+    if (fill.kind === "conic") return fillToCss(fill); // el cónico ya cierra su propio ciclo.
+    return `linear-gradient(${fill.angle}deg, ${[...fill.stops, fill.stops[0]].join(", ")})`;
+}
+
 function textEffectCss(style: TextStyle): string {
     const speed = style.animationSpeed ?? 4;
     const glow = style.fill.kind === "solid" ? style.fill.color : style.fill.stops[0];
@@ -45,7 +56,16 @@ function textEffectCss(style: TextStyle): string {
         case "shadow":
             return `filter: drop-shadow(2px 2px 0 rgba(0,0,0,.6));`;
         case "animated":
-            return `background-size: 300% 100%; animation: ${NS}-slide ${speed}s linear infinite;`;
+            // Truco para que el loop no dé un salto al reiniciar: repetimos
+            // el primer color al final (closedLoopGradient) y estiramos el
+            // fondo al doble (200%) del elemento. Así la mitad visible al
+            // empezar (0%–100% del fondo estirado) es justo la paleta
+            // original, y la mitad que se ve al terminar (100%–200%) es esa
+            // misma paleta invertida de vuelta al primer color — el fin de
+            // una vuelta y el principio de la siguiente son visualmente
+            // idénticos, así que el reinicio del `infinite` no se nota.
+            return `background-image: ${closedLoopGradient(style.fill)} !important; ` +
+                `background-size: 200% 100%; animation: ${NS}-slide ${speed}s linear infinite;`;
     }
 }
 
@@ -262,7 +282,7 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
 export const GLOBAL_KEYFRAMES = `
 @keyframes ${NS}-slide {
     from { background-position: 0% 50%; }
-    to   { background-position: 300% 50%; }
+    to   { background-position: 100% 50%; }
 }
 @media (prefers-reduced-motion: reduce) {
     .${NS}-display-name, .${NS}-message-name, .${NS}-bio {

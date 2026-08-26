@@ -884,6 +884,25 @@ function TextStyleEditor({ title, style, onChange }: {
                         closeOnSelect
                     />
 
+                    {current.effect === "animated" && (
+                        <>
+                            <Forms.FormTitle tag="h5" className={Margins.top8}>
+                                Velocidad: {(current.animationSpeed ?? 4).toFixed(1)}s por vuelta
+                            </Forms.FormTitle>
+                            <Text variant="text-xs/normal">
+                                Menos segundos = más rápido.
+                            </Text>
+                            <Slider
+                                minValue={1}
+                                maxValue={12}
+                                initialValue={current.animationSpeed ?? 4}
+                                onValueChange={(v: number) => onChange({ ...current, animationSpeed: Number(v.toFixed(1)) })}
+                                markers={[1, 3, 6, 9, 12]}
+                                onMarkerRender={(v: number) => `${v}s`}
+                            />
+                        </>
+                    )}
+
                     <Forms.FormTitle tag="h5" className={Margins.top8}>Fuente</Forms.FormTitle>
                     <TextInput
                         value={current.fontFamily ?? ""}
