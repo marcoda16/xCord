@@ -33,7 +33,7 @@ import type { User } from "@vencord/discord-types";
 
 import Editor from "./components/Editor";
 import { EditorModal } from "./components/EditorModal";
-import { fillToThemeColors } from "./lib/css";
+import { fillToThemeColors, NS } from "./lib/css";
 import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
 import { setBorderResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
@@ -42,6 +42,21 @@ const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("
 
 /** Para no animar nada si el usuario pidió reducir el movimiento. */
 const AccessibilityStore = findStoreLazy("AccessibilityStore");
+
+/**
+ * Refleja el interruptor de "reducir movimiento" de Discord en un atributo
+ * de `<html>`. `css.ts` lo usa para apagar las animaciones de texto —mirar
+ * ese mismo interruptor, y no la preferencia de Windows, es lo que hace que
+ * nuestras animaciones se comporten igual que las que Discord ya anima o
+ * congela por su cuenta (GIFs, avatares).
+ */
+function syncReduceMotionAttribute() {
+    try {
+        document.documentElement.toggleAttribute(`data-${NS}-reduce-motion`, !!AccessibilityStore?.useReducedMotion);
+    } catch {
+        // Sin esto, un fallo aquí no debería impedir que el resto del plugin arranque.
+    }
+}
 
 const settings = definePluginSettings({
     ownProfile: {
@@ -587,6 +602,15 @@ export default definePlugin({
         const own = getOwnProfile();
         if (own.userId) applyProfile(own);
 
+        // El CSS animado (degradado del nombre, etc.) mira este atributo en
+        // vez de la preferencia de reducir movimiento de Windows —esa es una
+        // señal distinta a la que usa Discord para sus propias animaciones,
+        // y podían no coincidir. Este sí es el mismo interruptor que decide
+        // si Discord anima sus GIFs y avatares, así que el texto se comporta
+        // igual que el resto de lo que ya ves moverse (o no) en la app.
+        syncReduceMotionAttribute();
+        AccessibilityStore?.addChangeListener?.(syncReduceMotionAttribute);
+
         // Desactivado mientras probamos el `profileFrame` nativo (arriba, en
         // profileHook): si los dos estuvieran activos a la vez veríamos el
         // borde duplicado, como pasó con el anillo. Si el nativo no funciona
@@ -605,6 +629,8 @@ export default definePlugin({
         setBorderResolver(null);
         teardown();
         ownProfile = null;
+        AccessibilityStore?.removeChangeListener?.(syncReduceMotionAttribute);
+        document.documentElement.removeAttribute(`data-${NS}-reduce-motion`);
     },
 
     // Expuesto para el editor y para depurar desde la consola.

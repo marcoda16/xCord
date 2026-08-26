@@ -284,9 +284,19 @@ export const GLOBAL_KEYFRAMES = `
     from { background-position: 0% 50%; }
     to   { background-position: 100% 50%; }
 }
-@media (prefers-reduced-motion: reduce) {
-    .${NS}-display-name, .${NS}-message-name, .${NS}-bio {
-        animation: none !important;
-    }
+/*
+ * Antes esto miraba "@media (prefers-reduced-motion: reduce)" — la
+ * preferencia de Windows. El problema: Discord tiene su propio interruptor
+ * para esto (Accesibilidad → "Reducir movimiento"), separado del de Windows,
+ * y usa ESE para decidir si anima sus propios GIFs y avatares. Alguien con
+ * el de Windows activado pero el de Discord apagado seguía viendo animarse
+ * todo lo nativo, mientras nuestro texto se congelaba solo — inconsistente.
+ * Ahora index.tsx pone este atributo en <html> leyendo el mismo interruptor
+ * que usa Discord, así que nuestra animación se comporta igual que el resto.
+ */
+html[data-${NS}-reduce-motion] .${NS}-display-name,
+html[data-${NS}-reduce-motion] .${NS}-message-name,
+html[data-${NS}-reduce-motion] .${NS}-bio {
+    animation: none !important;
 }
 `;
