@@ -14,6 +14,7 @@
  */
 
 import { NS } from "./css";
+import { lookupUserIdByAvatarUrl } from "./store";
 import type { CardBorder } from "../types";
 
 /**
@@ -68,13 +69,30 @@ const USER_ID_FROM_URL = /\/(?:avatars|banners|guilds\/\d+\/users)\/(\d+)\//;
 /** Marca de "ya procesado", para no recorrer el mismo nodo en cada mutación. */
 const STAMPED = `data-${NS}-stamped`;
 
-/** Selector de los avatares que sí llevan el id del usuario en la URL. */
-const AVATAR_IMG = "img[src*='/avatars/'], img[src*='/guilds/']";
-
 function extractUserId(img: HTMLImageElement): string | null {
-    // Avatares por defecto (usuarios sin foto) no llevan id en la URL. En ese
-    // caso el perfil no se puede identificar y lo dejamos sin tocar.
-    return USER_ID_FROM_URL.exec(img.src)?.[1] ?? null;
+    const fromDiscordUrl = USER_ID_FROM_URL.exec(img.src)?.[1];
+    if (fromDiscordUrl) return fromDiscordUrl;
+
+    // Un avatar puesto por xcord no es una URL de Discord —puede ser
+    // cualquier dominio—, así que el patrón de arriba nunca coincide. Sin
+    // este respaldo, un perfil con avatar propio nunca se identificaba como
+    // tal, y el resto de las personalizaciones (nombre, bio, fondo) se
+    // quedaban sin aplicar aunque el avatar sí se viera bien.
+    return lookupUserIdByAvatarUrl(img.src) ?? null;
+}
+
+/**
+ * Si esta imagen es (probablemente) un avatar: de Discord por la forma de su
+ * URL, o de xcord porque coincide con un avatar propio ya conocido.
+ *
+ * Reemplaza al viejo selector CSS `img[src*='/avatars/']` — ese filtraba por
+ * patrón de URL antes de intentar identificar al usuario, así que un avatar
+ * de xcord (que puede venir de cualquier dominio) nunca llegaba siquiera a
+ * `extractUserId`. Sin este cambio, el respaldo de ahí arriba no servía de
+ * nada: el nodo nunca se consideraba candidato para empezar.
+ */
+function isAvatarImg(img: HTMLImageElement): boolean {
+    return USER_ID_FROM_URL.test(img.src) || lookupUserIdByAvatarUrl(img.src) !== undefined;
 }
 
 /**
@@ -275,7 +293,7 @@ function findCardBoundary(root: Element, avatarImg: Element): Element {
 }
 
 function applyDecorations(root: Element, userId: string) {
-    const avatarImg = root.querySelector<HTMLImageElement>(AVATAR_IMG);
+    const avatarImg = [...root.querySelectorAll<HTMLImageElement>("img")].find(isAvatarImg);
     if (!avatarImg) return;
 
     // Siempre se llama, incluso sin borde: si el usuario lo quitó, hay que
@@ -333,8 +351,8 @@ export function startObserver(onSeen: OnProfileSeen) {
     if (observer) return;
 
     const scan = (node: ParentNode) => {
-        for (const img of node.querySelectorAll<HTMLImageElement>(AVATAR_IMG))
-            processAvatar(img, onSeen);
+        for (const img of node.querySelectorAll<HTMLImageElement>("img"))
+            if (isAvatarImg(img)) processAvatar(img, onSeen);
     };
 
     scan(document);
@@ -366,7 +384,7 @@ export function startObserver(onSeen: OnProfileSeen) {
 
                 if (node instanceof HTMLImageElement) {
                     // El nodo añadido es la propia imagen.
-                    if (node.matches(AVATAR_IMG)) processAvatar(node, onSeen);
+                    if (isAvatarImg(node)) processAvatar(node, onSeen);
                 } else if (node.getElementsByTagName("img").length) {
                     // Solo bajamos al subárbol si contiene imágenes.
                     // `getElementsByTagName` es una colección viva y comparar su

@@ -80,10 +80,27 @@ function flush() {
     ensureStyleElement().textContent = [GLOBAL_KEYFRAMES, ...injected.values()].join("\n");
 }
 
+/**
+ * Avatar personalizado → id del usuario dueño.
+ *
+ * `dom.ts` identifica de quién es un perfil leyendo el id directo de la URL
+ * del avatar (`.../avatars/<id>/...`), el mismo dato que siempre trae la
+ * imagen real de Discord. Un avatar de xcord no sigue ese patrón —es una URL
+ * cualquiera, de cualquier dominio—, así que sin este mapa `dom.ts` nunca
+ * reconoce el perfil como tal y el resto de las personalizaciones (nombre,
+ * bio, fondo) se queda sin aplicar aunque el avatar sí se vea bien.
+ */
+const avatarUrlToUserId = new Map<string, string>();
+
+export function lookupUserIdByAvatarUrl(url: string): string | undefined {
+    return avatarUrlToUserId.get(url);
+}
+
 /** Aplica (o reemplaza) los estilos de un usuario en el documento. */
 export function applyProfile(profile: XcordProfile) {
     const scope = `[data-${NS}-user="${profile.userId}"]`;
     injected.set(profile.userId, buildProfileCss(profile, scope));
+    if (profile.avatar?.image?.url) avatarUrlToUserId.set(profile.avatar.image.url, profile.userId);
     flush();
 }
 
@@ -118,6 +135,7 @@ export function teardown() {
     styleEl?.remove();
     styleEl = null;
     cache.clear();
+    avatarUrlToUserId.clear();
 }
 
 function isValid(p: unknown): p is XcordProfile {
