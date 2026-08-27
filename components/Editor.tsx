@@ -285,17 +285,12 @@ const SHOP_ITEM_TYPES: Record<keyof Catalog, string> = {
 const CATALOG_PAGE_SIZE = 24;
 
 /**
- * Valores de `sort_type` que acepta `/shop/search`. `popularity` está
- * confirmado —es el que ya usábamos—; `created_at` es la apuesta para "más
- * reciente", sin confirmar todavía contra la API real. Si al probarlo el
- * orden no cambia de verdad, hay que ajustar este valor —el resto del
- * código no necesita tocarse.
+ * Único valor de `sort_type` confirmado contra la API real. Se probó
+ * `created_at` para un orden "más reciente" y Discord lo rechaza con 400
+ * ("valor de enumeración no válido") — no hay, por ahora, forma de pedir
+ * el catálogo por fecha.
  */
-type SortType = "popularity" | "created_at";
-const SORT_OPTIONS: Array<{ label: string; value: SortType; }> = [
-    { label: "Más populares", value: "popularity" },
-    { label: "Más recientes", value: "created_at" }
-];
+type SortType = "popularity";
 
 /** CDN de las miniaturas de la tienda, visto en la pestaña Network. */
 const SHOP_CDN = "https://cdn.discordapp.com/media/v1/collectibles-shop";
@@ -994,9 +989,6 @@ interface CatalogSectionState {
     filteredEntries: CatalogEntry[];
     search: string;
     setSearch: (v: string) => void;
-    sort: SortType;
-    /** Cambia el orden y vuelve a cargar desde el principio con el nuevo criterio. */
-    setSort: (v: SortType) => void;
     loading: boolean;
     hasMore: boolean;
     /** Vuelve a empezar desde el principio, descartando lo ya cargado. */
@@ -1011,10 +1003,9 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [search, setSearch] = useState("");
-    const [sort, setSortState] = useState<SortType>("popularity");
 
-    const load = (offset: number, base: CatalogEntry[], withSort: SortType = sort) =>
-        loadCatalogSection(key, offset, withSort, setLoading, setHasMore, base, setEntries);
+    const load = (offset: number, base: CatalogEntry[]) =>
+        loadCatalogSection(key, offset, "popularity", setLoading, setHasMore, base, setEntries);
 
     // Filtra lo ya cargado — no pide más al servidor por buscar, así que solo
     // encuentra entre lo que "Cargar catálogo"/"Cargar más" ya trajeron.
@@ -1026,13 +1017,6 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
         filteredEntries,
         search,
         setSearch,
-        sort,
-        setSort: (v: SortType) => {
-            setSortState(v);
-            // Un orden nuevo no tiene sentido mezclado con páginas cargadas
-            // con el orden anterior — se empieza de cero.
-            if (entries.length) load(0, [], v);
-        },
         loading,
         hasMore,
         reload: () => load(0, []),
@@ -1040,29 +1024,17 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     };
 }
 
-/**
- * Buscador por nombre entre lo ya cargado, más el orden con el que se pide
- * el catálogo. El orden sí vuelve a pedir al servidor —cambia qué está
- * "cargado" en primer lugar—; el buscador solo filtra eso localmente.
- */
+/** Buscador por nombre entre lo que ya se cargó de una sección. */
 function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
     if (!section.entries.length) return null;
     return (
-        <Flex className={Margins.top8} style={{ gap: "8px", alignItems: "center" }}>
+        <div className={Margins.top8}>
             <TextInput
                 value={section.search}
                 placeholder={`Buscar entre ${section.entries.length} cargados…`}
                 onChange={(v: string) => section.setSearch(v)}
-                style={{ flex: 1 }}
             />
-            <Select
-                options={SORT_OPTIONS as unknown as Array<{ label: string; value: string; }>}
-                select={(v: string) => section.setSort(v as SortType)}
-                isSelected={(v: string) => v === section.sort}
-                serialize={(v: string) => v}
-                closeOnSelect
-            />
-        </Flex>
+        </div>
     );
 }
 
