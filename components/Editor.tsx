@@ -13,7 +13,7 @@ import { Flex } from "@components/Flex";
 import { Margins } from "@utils/margins";
 import { extractAndLoadChunksLazy, findComponentByCodeLazy } from "@webpack";
 import { FormSwitch } from "@components/FormSwitch";
-import { Button, Clickable, ColorPicker, Forms, RestAPI, Select, Slider, Text, TextInput, useEffect, useState } from "@webpack/common";
+import { Button, Clickable, ColorPicker, Forms, RestAPI, Select, Slider, Text, TextInput, useEffect, useRef, useState } from "@webpack/common";
 import type { User } from "@vencord/discord-types";
 import { UserStore } from "@webpack/common";
 
@@ -284,14 +284,6 @@ const SHOP_ITEM_TYPES: Record<keyof Catalog, string> = {
 /** Cuántos elementos traer por sección. Cada uno cuesta una petición aparte. */
 const CATALOG_PAGE_SIZE = 24;
 
-/**
- * Único valor de `sort_type` confirmado contra la API real. Se probó
- * `created_at` para un orden "más reciente" y Discord lo rechaza con 400
- * ("valor de enumeración no válido") — no hay, por ahora, forma de pedir
- * el catálogo por fecha.
- */
-type SortType = "popularity";
-
 /** CDN de las miniaturas de la tienda, visto en la pestaña Network. */
 const SHOP_CDN = "https://cdn.discordapp.com/media/v1/collectibles-shop";
 
@@ -489,7 +481,7 @@ async function fetchCardBorder(skuId: string): Promise<CardBorder | null> {
 async function loadCatalogSection(
     key: keyof Catalog,
     offset: number,
-    sort: SortType,
+    query: string,
     setLoading: (v: boolean) => void,
     setHasMore: (v: boolean) => void,
     entries: CatalogEntry[],
@@ -497,8 +489,8 @@ async function loadCatalogSection(
 ) {
     setLoading(true);
     try {
-        const page = await fetchCatalogSection(key, offset, sort);
-        console.log(`[xcord] catálogo de ${key} (offset ${offset}, orden ${sort}):`, page);
+        const page = await fetchCatalogSection(key, offset, query);
+        console.log(`[xcord] catálogo de ${key} (offset ${offset}, búsqueda "${query}"):`, page);
 
         if (!page.entries.length && offset === 0) {
             alert(
@@ -533,13 +525,26 @@ async function loadCatalogSection(
 async function fetchCatalogSection(
     key: keyof Catalog,
     offset: number,
-    sort: SortType
+    query: string
 ): Promise<{ entries: CatalogEntry[]; hasMore: boolean; }> {
     const itemType = SHOP_ITEM_TYPES[key];
+    const q = query.trim();
 
-    const { body: search } = await RestAPI.get({
-        url: `/shop/search?item_types=${itemType}&limit=${CATALOG_PAGE_SIZE}&offset=${offset}&sort_type=${sort}&sort_direction=desc`
+    // Con texto de búsqueda, Discord pide sort_type=relevance —confirmado
+    // viendo la petición real de su propia pantalla "Explora la tienda"—.
+    // Sin texto, es la búsqueda de siempre por popularidad. Una búsqueda de
+    // verdad contra su catálogo entero, no un filtro sobre lo ya cargado: sí
+    // encuentra algo recién agregado aunque todavía no sea popular.
+    const params = new URLSearchParams({
+        item_types: itemType,
+        limit: String(CATALOG_PAGE_SIZE),
+        offset: String(offset),
+        sort_type: q ? "relevance" : "popularity",
+        sort_direction: "desc"
     });
+    if (q) params.set("search", q);
+
+    const { body: search } = await RestAPI.get({ url: `/shop/search?${params.toString()}` });
     const skus: string[] = search?.skus ?? [];
     console.log(`[xcord] ${itemType}: ${skus.length} de ${search?.pagination?.total ?? "?"} en total`);
 
@@ -985,9 +990,8 @@ export function useProfileDraft(initial: XcordProfile, onSave: (p: XcordProfile)
 
 interface CatalogSectionState {
     entries: CatalogEntry[];
-    /** `entries` filtradas por `search`. Lo que hay que pasarle a `CatalogGrid`. */
-    filteredEntries: CatalogEntry[];
     search: string;
+    /** Actualiza el cuadro de texto y dispara la búsqueda real (con demora). */
     setSearch: (v: string) => void;
     loading: boolean;
     hasMore: boolean;
@@ -997,41 +1001,49 @@ interface CatalogSectionState {
     loadMore: () => void;
 }
 
+/** Cuánto esperar tras la última tecla antes de preguntarle al servidor. */
+const SEARCH_DEBOUNCE_MS = 400;
+
 /** Estado y carga paginada de una sección del catálogo, sin repetir por cada una. */
 function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     const [entries, setEntries] = useState<CatalogEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [search, setSearch] = useState("");
+    const debounceRef = useRef<number>();
 
-    const load = (offset: number, base: CatalogEntry[]) =>
-        loadCatalogSection(key, offset, "popularity", setLoading, setHasMore, base, setEntries);
-
-    // Filtra lo ya cargado — no pide más al servidor por buscar, así que solo
-    // encuentra entre lo que "Cargar catálogo"/"Cargar más" ya trajeron.
-    const q = search.trim().toLowerCase();
-    const filteredEntries = q ? entries.filter(e => e.title.toLowerCase().includes(q)) : entries;
+    const load = (offset: number, base: CatalogEntry[], query: string) =>
+        loadCatalogSection(key, offset, query, setLoading, setHasMore, base, setEntries);
 
     return {
         entries,
-        filteredEntries,
         search,
-        setSearch,
+        setSearch: (v: string) => {
+            setSearch(v);
+            // Una búsqueda de verdad contra el servidor, no un filtro local —
+            // por eso la demora: sin ella, cada tecla dispararía su propia
+            // petición.
+            window.clearTimeout(debounceRef.current);
+            debounceRef.current = window.setTimeout(() => load(0, [], v), SEARCH_DEBOUNCE_MS);
+        },
         loading,
         hasMore,
-        reload: () => load(0, []),
-        loadMore: () => load(entries.length, entries)
+        reload: () => load(0, [], search),
+        loadMore: () => load(entries.length, entries, search)
     };
 }
 
-/** Buscador por nombre entre lo que ya se cargó de una sección. */
+/**
+ * Buscador contra el catálogo real de Discord, no un filtro sobre lo ya
+ * cargado — encuentra algo recién agregado aunque todavía no sea popular.
+ * No hace falta "Cargar catálogo" primero: escribir aquí ya trae resultados.
+ */
 function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
-    if (!section.entries.length) return null;
     return (
         <div className={Margins.top8}>
             <TextInput
                 value={section.search}
-                placeholder={`Buscar entre ${section.entries.length} cargados…`}
+                placeholder="Buscar en la tienda…"
                 onChange={(v: string) => section.setSearch(v)}
             />
         </div>
@@ -1516,20 +1528,18 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 «View Avatar Decoration», y pega aquí la URL de la imagen.
             </Text>
 
+            <CatalogSearchInput section={decorations} />
             {decorations.entries.length > 0 ? (
-                <>
-                    <CatalogSearchInput section={decorations} />
-                    <CatalogGrid
-                        entries={decorations.filteredEntries}
-                        selected={draft.avatar?.decoration?.asset ?? ""}
-                        onSelect={asset => setDraft({
-                            ...draft,
-                            avatar: asset
-                                ? { ...draft.avatar, decoration: { asset } }
-                                : { ...draft.avatar, decoration: undefined }
-                        })}
-                    />
-                </>
+                <CatalogGrid
+                    entries={decorations.entries}
+                    selected={draft.avatar?.decoration?.asset ?? ""}
+                    onSelect={asset => setDraft({
+                        ...draft,
+                        avatar: asset
+                            ? { ...draft.avatar, decoration: { asset } }
+                            : { ...draft.avatar, decoration: undefined }
+                    })}
+                />
             ) : (
                 <TextInput
                     value={draft.avatar?.decoration?.asset ?? ""}
@@ -1549,15 +1559,13 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
             <Forms.FormTitle tag="h5" className={Margins.top8}>Efecto de perfil</Forms.FormTitle>
 
+            <CatalogSearchInput section={effects} />
             {effects.entries.length > 0 ? (
-                <>
-                    <CatalogSearchInput section={effects} />
-                    <CatalogGrid
-                        entries={effects.filteredEntries}
-                        selected={draft.profileEffectId ?? ""}
-                        onSelect={id => setDraft({ ...draft, profileEffectId: id || undefined })}
-                    />
-                </>
+                <CatalogGrid
+                    entries={effects.entries}
+                    selected={draft.profileEffectId ?? ""}
+                    onSelect={id => setDraft({ ...draft, profileEffectId: id || undefined })}
+                />
             ) : (
                 <TextInput
                     value={draft.profileEffectId ?? ""}
@@ -1573,26 +1581,24 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 no con una aproximación nuestra.
             </Text>
 
+            <CatalogSearchInput section={borders} />
             {borders.entries.length > 0 ? (
-                <>
-                    <CatalogSearchInput section={borders} />
-                    <CatalogGrid
-                        entries={borders.filteredEntries}
-                        selected={draft.cardBorder?.skuId ?? ""}
-                        onSelect={async skuId => {
-                            if (!skuId) return setDraft({ ...draft, cardBorder: undefined });
+                <CatalogGrid
+                    entries={borders.entries}
+                    selected={draft.cardBorder?.skuId ?? ""}
+                    onSelect={async skuId => {
+                        if (!skuId) return setDraft({ ...draft, cardBorder: undefined });
 
-                            setLoadingBorder(true);
-                            try {
-                                const border = await fetchCardBorder(skuId);
-                                if (!border) return void alert("No se pudo leer ese borde. Mira la consola.");
-                                setDraft(d => ({ ...d, cardBorder: border }));
-                            } finally {
-                                setLoadingBorder(false);
-                            }
-                        }}
-                    />
-                </>
+                        setLoadingBorder(true);
+                        try {
+                            const border = await fetchCardBorder(skuId);
+                            if (!border) return void alert("No se pudo leer ese borde. Mira la consola.");
+                            setDraft(d => ({ ...d, cardBorder: border }));
+                        } finally {
+                            setLoadingBorder(false);
+                        }
+                    }}
+                />
             ) : (
                 <Text variant="text-xs/normal">Pulsa «Cargar catálogo» para poder elegir uno.</Text>
             )}
@@ -1605,23 +1611,21 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 mismo truco que el resto — nuestro valor gana solo cuando no tienes una real puesta.
             </Text>
 
+            <CatalogSearchInput section={nameplates} />
             {nameplates.entries.length > 0 ? (
-                <>
-                    <CatalogSearchInput section={nameplates} />
-                    <CatalogGrid
-                        entries={nameplates.filteredEntries}
-                        selected={draft.nameplate?.asset ?? ""}
-                        onSelect={asset => {
-                            const entry = nameplates.entries.find(n => n.asset === asset);
-                            setDraft({
-                                ...draft,
-                                nameplate: asset
-                                    ? { asset, skuId: entry?.id, palette: entry?.palette }
-                                    : undefined
-                            });
-                        }}
-                    />
-                </>
+                <CatalogGrid
+                    entries={nameplates.entries}
+                    selected={draft.nameplate?.asset ?? ""}
+                    onSelect={asset => {
+                        const entry = nameplates.entries.find(n => n.asset === asset);
+                        setDraft({
+                            ...draft,
+                            nameplate: asset
+                                ? { asset, skuId: entry?.id, palette: entry?.palette }
+                                : undefined
+                        });
+                    }}
+                />
             ) : (
                 <TextInput
                     value={draft.nameplate?.asset ?? ""}
