@@ -395,7 +395,13 @@ function scanCatalog(node: any, out: Catalog, depth = 0, title = "") {
             : null;
         if (!bucket) continue;
 
-        const title = item?.title || item?.label || label || String(skuId);
+        // Para placa y borde, `item?.title` suele ser una descripción larga
+        // en vez de un nombre — el paquete que los envuelve (`label`) es lo
+        // que de verdad identifica de qué colección son, y es más útil para
+        // reconocerlos de un vistazo que su propia descripción.
+        const title = item?.type === COLLECTIBLE_BORDER || item?.type === COLLECTIBLE_NAMEPLATE
+            ? (label || item?.title || item?.label || String(skuId))
+            : (item?.title || item?.label || label || String(skuId));
         // Las decoraciones dan un asset directamente pintable como imagen; el
         // de la placa es una ruta, no sabemos construir su URL de CDN
         // todavía, así que no forzamos una miniatura para ella — pero sí hay
@@ -969,6 +975,10 @@ export function useProfileDraft(initial: XcordProfile, onSave: (p: XcordProfile)
 
 interface CatalogSectionState {
     entries: CatalogEntry[];
+    /** `entries` filtradas por `search`. Lo que hay que pasarle a `CatalogGrid`. */
+    filteredEntries: CatalogEntry[];
+    search: string;
+    setSearch: (v: string) => void;
     loading: boolean;
     hasMore: boolean;
     /** Vuelve a empezar desde el principio, descartando lo ya cargado. */
@@ -982,17 +992,40 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     const [entries, setEntries] = useState<CatalogEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(false);
+    const [search, setSearch] = useState("");
 
     const load = (offset: number, base: CatalogEntry[]) =>
         loadCatalogSection(key, offset, setLoading, setHasMore, base, setEntries);
 
+    // Filtra lo ya cargado — no pide más al servidor por buscar, así que solo
+    // encuentra entre lo que "Cargar catálogo"/"Cargar más" ya trajeron.
+    const q = search.trim().toLowerCase();
+    const filteredEntries = q ? entries.filter(e => e.title.toLowerCase().includes(q)) : entries;
+
     return {
         entries,
+        filteredEntries,
+        search,
+        setSearch,
         loading,
         hasMore,
         reload: () => load(0, []),
         loadMore: () => load(entries.length, entries)
     };
+}
+
+/** Buscador por nombre entre lo que ya se cargó de una sección. */
+function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
+    if (!section.entries.length) return null;
+    return (
+        <div className={Margins.top8}>
+            <TextInput
+                value={section.search}
+                placeholder={`Buscar entre ${section.entries.length} cargados…`}
+                onChange={(v: string) => section.setSearch(v)}
+            />
+        </div>
+    );
 }
 
 /** "Cargar catálogo" la primera vez, "Cargar más" mientras queden páginas. */
@@ -1474,16 +1507,19 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             </Text>
 
             {decorations.entries.length > 0 ? (
-                <CatalogGrid
-                    entries={decorations.entries}
-                    selected={draft.avatar?.decoration?.asset ?? ""}
-                    onSelect={asset => setDraft({
-                        ...draft,
-                        avatar: asset
-                            ? { ...draft.avatar, decoration: { asset } }
-                            : { ...draft.avatar, decoration: undefined }
-                    })}
-                />
+                <>
+                    <CatalogSearchInput section={decorations} />
+                    <CatalogGrid
+                        entries={decorations.filteredEntries}
+                        selected={draft.avatar?.decoration?.asset ?? ""}
+                        onSelect={asset => setDraft({
+                            ...draft,
+                            avatar: asset
+                                ? { ...draft.avatar, decoration: { asset } }
+                                : { ...draft.avatar, decoration: undefined }
+                        })}
+                    />
+                </>
             ) : (
                 <TextInput
                     value={draft.avatar?.decoration?.asset ?? ""}
@@ -1504,11 +1540,14 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             <Forms.FormTitle tag="h5" className={Margins.top8}>Efecto de perfil</Forms.FormTitle>
 
             {effects.entries.length > 0 ? (
-                <CatalogGrid
-                    entries={effects.entries}
-                    selected={draft.profileEffectId ?? ""}
-                    onSelect={id => setDraft({ ...draft, profileEffectId: id || undefined })}
-                />
+                <>
+                    <CatalogSearchInput section={effects} />
+                    <CatalogGrid
+                        entries={effects.filteredEntries}
+                        selected={draft.profileEffectId ?? ""}
+                        onSelect={id => setDraft({ ...draft, profileEffectId: id || undefined })}
+                    />
+                </>
             ) : (
                 <TextInput
                     value={draft.profileEffectId ?? ""}
@@ -1525,22 +1564,25 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             </Text>
 
             {borders.entries.length > 0 ? (
-                <CatalogGrid
-                    entries={borders.entries}
-                    selected={draft.cardBorder?.skuId ?? ""}
-                    onSelect={async skuId => {
-                        if (!skuId) return setDraft({ ...draft, cardBorder: undefined });
+                <>
+                    <CatalogSearchInput section={borders} />
+                    <CatalogGrid
+                        entries={borders.filteredEntries}
+                        selected={draft.cardBorder?.skuId ?? ""}
+                        onSelect={async skuId => {
+                            if (!skuId) return setDraft({ ...draft, cardBorder: undefined });
 
-                        setLoadingBorder(true);
-                        try {
-                            const border = await fetchCardBorder(skuId);
-                            if (!border) return void alert("No se pudo leer ese borde. Mira la consola.");
-                            setDraft(d => ({ ...d, cardBorder: border }));
-                        } finally {
-                            setLoadingBorder(false);
-                        }
-                    }}
-                />
+                            setLoadingBorder(true);
+                            try {
+                                const border = await fetchCardBorder(skuId);
+                                if (!border) return void alert("No se pudo leer ese borde. Mira la consola.");
+                                setDraft(d => ({ ...d, cardBorder: border }));
+                            } finally {
+                                setLoadingBorder(false);
+                            }
+                        }}
+                    />
+                </>
             ) : (
                 <Text variant="text-xs/normal">Pulsa «Cargar catálogo» para poder elegir uno.</Text>
             )}
@@ -1554,19 +1596,22 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             </Text>
 
             {nameplates.entries.length > 0 ? (
-                <CatalogGrid
-                    entries={nameplates.entries}
-                    selected={draft.nameplate?.asset ?? ""}
-                    onSelect={asset => {
-                        const entry = nameplates.entries.find(n => n.asset === asset);
-                        setDraft({
-                            ...draft,
-                            nameplate: asset
-                                ? { asset, skuId: entry?.id, palette: entry?.palette }
-                                : undefined
-                        });
-                    }}
-                />
+                <>
+                    <CatalogSearchInput section={nameplates} />
+                    <CatalogGrid
+                        entries={nameplates.filteredEntries}
+                        selected={draft.nameplate?.asset ?? ""}
+                        onSelect={asset => {
+                            const entry = nameplates.entries.find(n => n.asset === asset);
+                            setDraft({
+                                ...draft,
+                                nameplate: asset
+                                    ? { asset, skuId: entry?.id, palette: entry?.palette }
+                                    : undefined
+                            });
+                        }}
+                    />
+                </>
             ) : (
                 <TextInput
                     value={draft.nameplate?.asset ?? ""}
