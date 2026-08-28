@@ -25,6 +25,7 @@ export function EditorModal({ props, initial, onSave, sync }: {
     return (
         <Modal
             {...props}
+            size="xl"
             title="Personalizar perfil · xcord"
             actions={[
                 {
