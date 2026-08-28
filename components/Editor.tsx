@@ -19,7 +19,7 @@ import { UserStore } from "@webpack/common";
 
 import type { PluginNative } from "@utils/types";
 
-import { fillToThemeColors } from "../lib/css";
+import { fillToCss, fillToThemeColors } from "../lib/css";
 import { applyPreview, clearPreview, PREVIEW_CLASS, setDraftOverride } from "../lib/store";
 import type { CardBorder, DynamicBackground, Fill, TextEffect, TextStyle, XcordProfile } from "../types";
 import { emptyProfile } from "../types";
@@ -839,6 +839,18 @@ function FillEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => voi
                 isSelected={(kind: string) => kind === fill.kind}
                 serialize={(kind: string) => kind}
                 closeOnSelect
+            />
+
+            {/* Mismo bloque redondeado que el "gradientSwatch" nativo de
+                Discord — usa el mismo generador de CSS que la capa real, así
+                que lo que se ve acá es exactamente el resultado final. */}
+            <div
+                className={Margins.top8}
+                style={{
+                    height: "48px",
+                    borderRadius: "8px",
+                    background: fillToCss(fill)
+                }}
             />
 
             <Flex className={Margins.top8} style={{ flexWrap: "wrap", gap: "8px" }}>

@@ -11,7 +11,7 @@ import type { AvatarStyle, BannerStyle, Fill, FontDefinition, TextStyle, XcordPr
 /** Prefijo de todas las clases y variables que inyectamos, para no chocar con Discord. */
 export const NS = "xcord";
 
-function fillToCss(fill: Fill): string {
+export function fillToCss(fill: Fill): string {
     switch (fill.kind) {
         case "solid":
             return fill.color;
