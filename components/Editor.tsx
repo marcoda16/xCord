@@ -21,7 +21,7 @@ import type { PluginNative } from "@utils/types";
 
 import { fillToCss, fillToThemeColors } from "../lib/css";
 import { applyPreview, clearPreview, PREVIEW_CLASS, setDraftOverride } from "../lib/store";
-import type { CardBorder, DynamicBackground, Fill, TextEffect, TextStyle, XcordProfile } from "../types";
+import type { CardBorder, DynamicBackground, Fill, NativeEffectId, NativeNameEffect, XcordProfile } from "../types";
 import { emptyProfile } from "../types";
 
 interface ProfileModalProps {
@@ -43,15 +43,6 @@ interface ProfileModalProps {
 const ProfileModal = findComponentByCodeLazy<ProfileModalProps>(
     "isTryItOut:", "pendingThemeColors:", "pendingAvatarDecoration:", "EDIT_PROFILE_BANNER"
 );
-
-const EFFECTS: Array<{ label: string; value: TextEffect; }> = [
-    { label: "Ninguno", value: "none" },
-    { label: "Neón", value: "neon" },
-    { label: "Contorno", value: "outline" },
-    { label: "Cromado", value: "chrome" },
-    { label: "Sombra", value: "shadow" },
-    { label: "Degradado animado", value: "animated" }
-];
 
 const FILL_KINDS = [
     { label: "Color plano", value: "solid" },
@@ -887,18 +878,59 @@ function FillEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => voi
 }
 
 /** Editor de un estilo de texto completo: relleno, efecto y fuente. */
-function TextStyleEditor({ title, style, onChange }: {
-    title: string;
-    style: TextStyle | undefined;
-    onChange: (s: TextStyle | undefined) => void;
+/**
+ * Los 8 efectos de nombre de Nitro, verificados contra `displayNameStyles`
+ * real (id, nombre y cantidad de colores que Discord de verdad usa por
+ * efecto — el resto del arreglo de 5 colores queda en 0/sin usar).
+ */
+const NATIVE_NAME_EFFECTS: Array<{ label: string; value: NativeEffectId; colors: number; }> = [
+    { label: "Sólido", value: 1, colors: 1 },
+    { label: "Degradado", value: 2, colors: 2 },
+    { label: "Neón", value: 3, colors: 2 },
+    { label: "Toon", value: 4, colors: 2 },
+    { label: "Pop", value: 5, colors: 2 },
+    { label: "Resplandor", value: 6, colors: 2 },
+    { label: "Prisma (degradado animado)", value: 7, colors: 5 },
+    { label: "Gomoso", value: 8, colors: 2 }
+];
+
+const DEFAULT_NAME_EFFECT_COLORS = ["#ff00cc", "#3333ff", "#00ffcc", "#ffcc00", "#ff3366"];
+
+/**
+ * Editor del efecto nativo de nombre de Nitro.
+ *
+ * A diferencia del resto de los estilos de texto de xcord (CSS propio, solo
+ * en el perfil), esto es el mismo dato que usa Discord
+ * (`user.displayNameStyles`): un solo ajuste que se ve igual en el perfil,
+ * los mensajes y la lista de miembros, porque lo renderiza el propio
+ * Discord, no una capa de CSS nuestra.
+ */
+function NativeNameEffectEditor({ effect, onChange }: {
+    effect: NativeNameEffect | undefined;
+    onChange: (e: NativeNameEffect | undefined) => void;
 }) {
-    const enabled = !!style;
-    const current: TextStyle = style ?? { fill: defaultFill("linear"), effect: "none" };
+    const enabled = !!effect;
+    const current: NativeNameEffect = effect ?? { effectId: 2, colors: DEFAULT_NAME_EFFECT_COLORS.slice(0, 2) };
+    const spec = NATIVE_NAME_EFFECTS.find(e => e.value === current.effectId) ?? NATIVE_NAME_EFFECTS[1];
+
+    // Al cambiar de efecto, recorta o completa los colores a los que ese
+    // efecto de verdad usa — conservando los que ya elegiste cuando alcanza.
+    function setEffectId(id: NativeEffectId) {
+        const need = NATIVE_NAME_EFFECTS.find(e => e.value === id)!.colors;
+        const colors = Array.from({ length: need }, (_, i) => current.colors[i] ?? DEFAULT_NAME_EFFECT_COLORS[i]);
+        onChange({ ...current, effectId: id, colors });
+    }
+
+    function setColor(i: number, hex: string) {
+        const colors = [...current.colors];
+        colors[i] = hex;
+        onChange({ ...current, colors });
+    }
 
     return (
         <section className={Margins.top16}>
             <FormSwitch
-                title={title}
+                title="Personalizar el nombre para mostrar"
                 value={enabled}
                 onChange={(on: boolean) => onChange(on ? current : undefined)}
                 hideBorder
@@ -906,42 +938,32 @@ function TextStyleEditor({ title, style, onChange }: {
 
             {enabled && (
                 <div style={{ paddingLeft: "12px" }}>
-                    <FillEditor fill={current.fill} onChange={fill => onChange({ ...current, fill })} />
+                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                        Es el mismo efecto de Nitro que usa Discord: se ve igual en el perfil,
+                        los mensajes y la lista de miembros.
+                    </Text>
 
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Efecto</Forms.FormTitle>
+                    <Forms.FormTitle tag="h5">Efecto</Forms.FormTitle>
                     <Select
-                        options={EFFECTS}
-                        select={(value: TextEffect) => onChange({ ...current, effect: value })}
-                        isSelected={(value: TextEffect) => value === current.effect}
-                        serialize={(value: string) => value}
+                        options={NATIVE_NAME_EFFECTS}
+                        select={setEffectId}
+                        isSelected={(value: NativeEffectId) => value === current.effectId}
+                        serialize={(value: number) => String(value)}
                         closeOnSelect
                     />
 
-                    {current.effect === "animated" && (
-                        <>
-                            <Forms.FormTitle tag="h5" className={Margins.top8}>
-                                Velocidad: {(current.animationSpeed ?? 4).toFixed(1)}s por vuelta
-                            </Forms.FormTitle>
-                            <Text variant="text-xs/normal">
-                                Menos segundos = más rápido.
-                            </Text>
-                            <Slider
-                                minValue={1}
-                                maxValue={12}
-                                initialValue={current.animationSpeed ?? 4}
-                                onValueChange={(v: number) => onChange({ ...current, animationSpeed: Number(v.toFixed(1)) })}
-                                markers={[1, 3, 6, 9, 12]}
-                                onMarkerRender={(v: number) => `${v}s`}
+                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        {spec.colors === 1 ? "Color" : "Colores"}
+                    </Forms.FormTitle>
+                    <Flex style={{ gap: "8px", flexWrap: "wrap" }}>
+                        {Array.from({ length: spec.colors }, (_, i) => (
+                            <ColorField
+                                key={i}
+                                value={current.colors[i] ?? DEFAULT_NAME_EFFECT_COLORS[i]}
+                                onChange={hex => setColor(i, hex)}
                             />
-                        </>
-                    )}
-
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Fuente</Forms.FormTitle>
-                    <TextInput
-                        value={current.fontFamily ?? ""}
-                        placeholder="Nombre de la familia, p. ej. Orbitron"
-                        onChange={(v: string) => onChange({ ...current, fontFamily: v || undefined })}
-                    />
+                        ))}
+                    </Flex>
                 </div>
             )}
         </section>
@@ -1270,15 +1292,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             })()}
 
             <Forms.FormTitle tag="h3" className={Margins.top16}>Nombre para mostrar</Forms.FormTitle>
-            <TextStyleEditor
-                title="Personalizar el nombre del perfil"
-                style={draft.displayName}
+            <NativeNameEffectEditor
+                effect={draft.displayName}
                 onChange={displayName => setDraft({ ...draft, displayName })}
-            />
-            <TextStyleEditor
-                title="Personalizar el nombre en los mensajes"
-                style={draft.messageName}
-                onChange={messageName => setDraft({ ...draft, messageName })}
             />
 
             <Forms.FormTitle tag="h3" className={Margins.top16}>Banner</Forms.FormTitle>

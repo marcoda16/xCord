@@ -37,7 +37,6 @@ const SELECTORS = {
     // Los selectores de atributo distinguen mayúsculas, así que esto sigue sin
     // caer en `profileHeaderBannerContainer__` (B mayúscula).
     banner: '[class*="banner_"]',
-    displayName: '[class*="displayName"]',
     // El fondo ampliado y desenfocado detrás de la columna derecha del perfil
     // v2. Discord lo alimenta con la URL del banner; lo replicamos para los
     // casos que él no puede cubrir (banner incrustado, o solo degradado).
@@ -123,7 +122,6 @@ function tagElements(root: Element) {
     const map: Array<[string, string]> = [
         [SELECTORS.avatar, `${NS}-avatar`],
         [SELECTORS.banner, `${NS}-banner`],
-        [SELECTORS.displayName, `${NS}-display-name`],
         [SELECTORS.background, `${NS}-bg`],
         [SELECTORS.dynamicBg, `${NS}-dynamic-bg`],
         [SELECTORS.bio, `${NS}-bio`]
@@ -415,7 +413,7 @@ export function stopObserver() {
         el.removeAttribute(STAMPED);
         el.removeAttribute(`data-${NS}-user`);
     }
-    for (const className of [`${NS}-avatar`, `${NS}-banner`, `${NS}-display-name`, `${NS}-bio`, `${NS}-bg`, `${NS}-dynamic-bg`]) {
+    for (const className of [`${NS}-avatar`, `${NS}-banner`, `${NS}-bio`, `${NS}-bg`, `${NS}-dynamic-bg`]) {
         for (const el of document.querySelectorAll(`.${className}`))
             el.classList.remove(className);
     }

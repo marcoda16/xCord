@@ -124,6 +124,10 @@ export function saveOwnProfile(profile: XcordProfile) {
     // Fuerza el recálculo de los useMemo de Discord que parcheamos; vive en
     // el store para que el borrador del editor comparta el mismo contador.
     bumpProfileVersion();
+    // El objeto base de Discord no cambia solo porque edites tu perfil, así
+    // que el caché de xcordOverrideUser lo seguiría sirviendo con el efecto
+    // viejo si no lo invalidamos a mano acá.
+    userOverrideCache.delete(profile.userId);
 }
 
 /** El secreto de esta instalación, generándolo la primera vez que hace falta. */
@@ -209,6 +213,52 @@ function resolveProfile(userId: string): XcordProfile | null {
     // vea al instante lo que no es CSS (banner, tema, efecto, borde).
     if (userId && userId === own.userId) return getDraftOverride() ?? own;
     return getCached(userId) ?? null;
+}
+
+/** "#ff00cc" → 16711884. Discord codifica los colores del nombre como enteros, no hex. */
+function hexToUint(hex: string): number {
+    return parseInt(hex.replace("#", ""), 16) || 0;
+}
+
+/**
+ * El objeto que `UserStore.getUser` devolvería de tener Nitro con este
+ * efecto puesto de verdad — mismo formato que `user.displayNameStyles`,
+ * confirmado leyendo una cuenta real desde la consola.
+ */
+function toDiscordNameEffect(effect: XcordProfile["displayName"]) {
+    if (!effect) return undefined;
+    // Discord siempre trae 5 casillas (una por gotero en su propio editor);
+    // las que faltan se completan en 0, que es como codifica "sin usar".
+    const colors = [0, 0, 0, 0, 0];
+    effect.colors.slice(0, 5).forEach((hex, i) => { colors[i] = hexToUint(hex); });
+    return { effectId: effect.effectId, colors, fontId: effect.fontId ?? 0 };
+}
+
+/**
+ * Copia con `displayNameStyles` de xcord metida, reusada mientras el
+ * usuario base no cambie — `UserStore.getUser` se llama constantemente en
+ * toda la interfaz, así que sin este caché estaríamos creando un objeto
+ * nuevo en cada llamada y rompiendo cualquier comparación por referencia
+ * (===) que React use para decidir si algo necesita re-renderizarse.
+ */
+const userOverrideCache = new Map<string, { rawUser: unknown; merged: unknown; }>();
+
+function xcordOverrideUser(user: any, userId: string): any {
+    if (!user) return user;
+
+    const effect = toDiscordNameEffect(resolveProfile(userId)?.displayName);
+    // Camino rápido: la inmensa mayoría de los usuarios que se consultan no
+    // tienen nada puesto por xcord — devolver el objeto tal cual, sin ni
+    // siquiera tocar el caché, es lo mismo que hacía Discord antes de este
+    // parche.
+    if (!effect) return user;
+
+    const cached = userOverrideCache.get(userId);
+    if (cached && cached.rawUser === user) return cached.merged;
+
+    const merged = virtualMerge(user, { displayNameStyles: effect });
+    userOverrideCache.set(userId, { rawUser: user, merged });
+    return merged;
 }
 
 const syncActions = {
@@ -410,6 +460,26 @@ export default definePlugin({
                 match: /function (\i)\(e\)\{let t,\{id:(\i),banner:(\i),canAnimate:(\i),size:(\i)\}=e;if\(null==\3\)return;/,
                 replace: "function $1(e){const x=$self.xcordDirectImage(e.banner);if(x)return x;let t,{id:$2,banner:$3,canAnimate:$4,size:$5}=e;if(null==$3)return;"
             }
+        },
+        {
+            // El efecto del nombre (Neón, Prisma, Gominola...) no es CSS
+            // nuestro: es el mismo campo que usa Discord con Nitro de
+            // verdad, `user.displayNameStyles` — confirmado poniéndonos un
+            // efecto real y leyendo el objeto de nuestra propia cuenta
+            // desde la consola. Como lo renderiza el componente nativo
+            // (`UserNameWithEffects`) dondequiera que Discord ya sepa
+            // mostrar un nombre —perfil, mensajes, lista de miembros—, un
+            // solo punto de inyección alcanza para todos esos sitios a la
+            // vez: `UserStore.getUser`, el método más simple que
+            // encontramos en toda la sesión (`getUser(e){if(null!=e)return
+            // S[e]}`, hallado por referencia de función, no adivinando
+            // texto). `displayName="UserStore"` es el nombre de la clase, no
+            // se traduce ni se minifica.
+            find: 'displayName="UserStore"',
+            replacement: {
+                match: /getUser\((\i)\)\{if\(null!=\1\)return (\i)\[\1\]\}/,
+                replace: "getUser($1){if(null!=$1)return $self.xcordOverrideUser($2[$1],$1)}"
+            }
         }
     ],
 
@@ -476,6 +546,9 @@ export default definePlugin({
     xcordDirectImage(value?: string): string | undefined {
         return typeof value === "string" && /^(https?:|data:)/.test(value) ? value : undefined;
     },
+
+    /** El usuario que devuelve `UserStore.getUser`, con nuestro efecto de nombre metido si hay uno. */
+    xcordOverrideUser,
 
     /**
      * Si toca animar una decoración que Discord pinta estática por omisión.
@@ -631,6 +704,7 @@ export default definePlugin({
         ownProfile = null;
         AccessibilityStore?.removeChangeListener?.(syncReduceMotionAttribute);
         document.documentElement.removeAttribute(`data-${NS}-reduce-motion`);
+        userOverrideCache.clear();
     },
 
     // Expuesto para el editor y para depurar desde la consola.

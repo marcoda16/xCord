@@ -272,10 +272,11 @@ export function buildProfileCss(profile: XcordProfile, scope: string): string {
     // solo tiene degradado.
     out.push(dynamicBackgroundCss(profile, scope));
 
-    if (profile.displayName)
-        out.push(`${scope} .${NS}-display-name { ${textStyleCss(profile.displayName)} }`);
-    if (profile.messageName)
-        out.push(`${scope} .${NS}-message-name { ${textStyleCss(profile.messageName)} }`);
+    // displayName ya no pasa por acá: es un efecto NATIVO de Discord
+    // (`user.displayNameStyles`), inyectado en index.tsx sobre el propio
+    // UserStore — Discord lo renderiza donde sea que ya sepa mostrar un
+    // nombre (perfil, mensajes, lista de miembros), sin necesitar CSS
+    // nuestro ni el targeting por clase que sí hace falta para lo de abajo.
     if (profile.bio)
         out.push(`${scope} .${NS}-bio { ${textStyleCss(profile.bio)} }`);
     if (profile.banner)

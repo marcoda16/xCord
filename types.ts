@@ -34,6 +34,25 @@ export interface TextStyle {
     animationSpeed?: number;
 }
 
+/** Los 8 efectos nativos de Nitro para el nombre, verificados contra la API real. */
+export type NativeEffectId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/**
+ * Estilo nativo del nombre para mostrar: el mismo dato que usa el propio
+ * Discord para Nitro (`user.displayNameStyles`), no una aproximación en
+ * CSS. Por eso se aplica en perfil, mensajes y lista de miembros por
+ * igual, sin necesitar el targeting por contexto que sí hace falta para el
+ * resto de los efectos de xcord (bio, etc.) — es Discord mismo quien lo
+ * renderiza donde sea que ya sepa mostrar un nombre.
+ */
+export interface NativeNameEffect {
+    effectId: NativeEffectId;
+    /** Hasta 5 colores en hex. Discord los codifica como enteros; esa conversión pasa en el motor nativo, no acá. */
+    colors: Hex[];
+    /** Fuente decorativa nativa de Discord. Sin esto, usa la que tengas puesta de forma normal. */
+    fontId?: number;
+}
+
 /** Una imagen: URL remota o data-URI incrustado. Los GIF se soportan igual. */
 export interface ImageSource {
     url: string;
@@ -165,9 +184,7 @@ export interface XcordProfile {
      */
     nameplate?: { asset: string; skuId?: string; palette?: string; };
 
-    displayName?: TextStyle;
-    /** Estilo del nombre tal como aparece en los mensajes del chat. */
-    messageName?: TextStyle;
+    displayName?: NativeNameEffect;
     bio?: TextStyle;
     banner?: BannerStyle;
     avatar?: AvatarStyle;
