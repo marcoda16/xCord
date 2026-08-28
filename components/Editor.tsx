@@ -897,6 +897,17 @@ const NATIVE_NAME_EFFECTS: Array<{ label: string; value: NativeEffectId; colors:
 const DEFAULT_NAME_EFFECT_COLORS = ["#ff00cc", "#3333ff", "#00ffcc", "#ffcc00", "#ff3366"];
 
 /**
+ * Aproximación en CSS de cómo se va a ver el efecto, solo para el bloque de
+ * vista previa del editor — el resultado real lo pinta el componente nativo
+ * de Discord (`UserNameWithEffects`), esto es nomás una guía de colores.
+ */
+function nameEffectPreviewCss(colors: string[], count: number): string {
+    const used = colors.slice(0, count).filter(Boolean);
+    if (used.length <= 1) return used[0] ?? "#ffffff";
+    return `linear-gradient(90deg, ${used.join(", ")})`;
+}
+
+/**
  * Editor del efecto nativo de nombre de Nitro.
  *
  * A diferencia del resto de los estilos de texto de xcord (CSS propio, solo
@@ -950,6 +961,17 @@ function NativeNameEffectEditor({ effect, onChange }: {
                         isSelected={(value: NativeEffectId) => value === current.effectId}
                         serialize={(value: number) => String(value)}
                         closeOnSelect
+                    />
+
+                    {/* Mismo bloque redondeado que el "gradientSwatch" nativo
+                        de Discord, igual que el de FillEditor más abajo. */}
+                    <div
+                        className={Margins.top8}
+                        style={{
+                            height: "48px",
+                            borderRadius: "8px",
+                            background: nameEffectPreviewCss(current.colors, spec.colors)
+                        }}
                     />
 
                     <Forms.FormTitle tag="h5" className={Margins.top8}>
