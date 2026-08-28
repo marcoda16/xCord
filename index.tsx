@@ -496,11 +496,24 @@ export default definePlugin({
             // S[e]}`, hallado por referencia de función, no adivinando
             // texto). `displayName="UserStore"` es el nombre de la clase, no
             // se traduce ni se minifica.
+            //
+            // `getCurrentUser()` no pasa por `getUser()` — es un acceso
+            // aparte (`return S[p.default.getId()]}`), confirmado en vivo:
+            // el objeto que devuelve uno y otro para el mismo id no eran ni
+            // siquiera el mismo objeto. Sin este segundo parche, el panel de
+            // cuenta abajo a la izquierda (que lee el usuario actual con
+            // este método) se quedaba sin el efecto.
             find: 'displayName="UserStore"',
-            replacement: {
-                match: /getUser\((\i)\)\{if\(null!=\1\)return (\i)\[\1\]\}/,
-                replace: "getUser($1){if(null!=$1)return $self.xcordOverrideUser($2[$1],$1)}"
-            }
+            replacement: [
+                {
+                    match: /getUser\((\i)\)\{if\(null!=\1\)return (\i)\[\1\]\}/,
+                    replace: "getUser($1){if(null!=$1)return $self.xcordOverrideUser($2[$1],$1)}"
+                },
+                {
+                    match: /getCurrentUser\(\)\{return (\i)\[(\i)\.default\.getId\(\)\]\}/,
+                    replace: "getCurrentUser(){const e=$2.default.getId();return $self.xcordOverrideUser($1[e],e)}"
+                }
+            ]
         }
     ],
 
