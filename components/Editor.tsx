@@ -1132,7 +1132,12 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
     const avatarEmbeddedSize = avatarIsEmbedded ? Math.round(avatarUrl.length * 0.75) : 0;
 
     return (
-        <div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", alignItems: "flex-start" }}>
+            {/* Columna de controles. `minWidth: 0` es necesario para que un
+                flex item pueda encogerse por debajo del ancho de su
+                contenido —sin esto, texto largo empuja la columna entera y
+                la vista previa termina apretada o se cae de la fila. */}
+            <div style={{ flex: "1 1 380px", minWidth: 0 }}>
             <Forms.FormTitle tag="h3">Fondo del perfil</Forms.FormTitle>
             <FormSwitch
                 title="Personalizar el fondo"
@@ -1752,31 +1757,41 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     </Flex>
                 </>
             )}
+            </div>
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Vista previa</Forms.FormTitle>
-            <Text variant="text-xs/normal" className={Margins.bottom8}>
-                Este es el componente real de Discord, no una imitación.
-            </Text>
+            {/* Columna de vista previa. `position: sticky` la deja fija en
+                pantalla mientras la izquierda hace scroll —así no hay que
+                bajar hasta el fondo para ver el resultado de cada cambio.
+                `flexWrap: "wrap"` en el contenedor de arriba es lo que hace
+                que esto se caiga a una fila propia (debajo, ancho completo)
+                en vez de apretarse cuando no hay sitio — el mismo
+                comportamiento de antes en pantallas angostas. */}
+            <div style={{ flex: "1 1 340px", position: "sticky", top: 0, alignSelf: "flex-start" }}>
+                <Forms.FormTitle tag="h3">Vista previa</Forms.FormTitle>
+                <Text variant="text-xs/normal" className={Margins.bottom8}>
+                    Este es el componente real de Discord, no una imitación.
+                </Text>
 
-            <div className={PREVIEW_CLASS}>
-                <ProfileModal
-                    user={UserStore.getCurrentUser()}
-                    // El fondo no va por CSS sino por el tema nativo, que se lee
-                    // del store — y el store solo conoce el perfil guardado. Esta
-                    // es la prop con la que Discord previsualiza colores antes de
-                    // aplicarlos, así que el borrador se ve sin guardar nada.
-                    pendingThemeColors={
-                        draft.background
-                            ? fillToThemeColors(draft.background.fill)
-                            : [0, 0]
-                    }
-                    onAvatarChange={() => { }}
-                    onBannerChange={() => { }}
-                    canUsePremiumCustomization={true}
-                    hideExampleButton={true}
-                    hideFakeActivity={true}
-                    isTryItOut={true}
-                />
+                <div className={PREVIEW_CLASS}>
+                    <ProfileModal
+                        user={UserStore.getCurrentUser()}
+                        // El fondo no va por CSS sino por el tema nativo, que se lee
+                        // del store — y el store solo conoce el perfil guardado. Esta
+                        // es la prop con la que Discord previsualiza colores antes de
+                        // aplicarlos, así que el borrador se ve sin guardar nada.
+                        pendingThemeColors={
+                            draft.background
+                                ? fillToThemeColors(draft.background.fill)
+                                : [0, 0]
+                        }
+                        onAvatarChange={() => { }}
+                        onBannerChange={() => { }}
+                        canUsePremiumCustomization={true}
+                        hideExampleButton={true}
+                        hideFakeActivity={true}
+                        isTryItOut={true}
+                    />
+                </div>
             </div>
         </div>
     );
