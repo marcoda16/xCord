@@ -1132,8 +1132,15 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
     const avatarEmbeddedSize = avatarIsEmbedded ? Math.round(avatarUrl.length * 0.75) : 0;
 
     return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", alignItems: "flex-start" }}>
-            {/* Columna de controles. `minWidth: 0` es necesario para que un
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
+            {/* Sin `alignItems: flex-start` a propósito: las dos columnas
+                deben estirarse a la altura completa de la fila (el
+                comportamiento por defecto de flex), o la de la derecha —más
+                corta que la de controles— se queda sin espacio propio donde
+                pegarse, y el `sticky` de más abajo deja de "sticky-ar" en
+                cuanto el scroll pasa de su propia altura.
+
+                Columna de controles. `minWidth: 0` es necesario para que un
                 flex item pueda encogerse por debajo del ancho de su
                 contenido —sin esto, texto largo empuja la columna entera y
                 la vista previa termina apretada o se cae de la fila. */}
@@ -1759,14 +1766,18 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             )}
             </div>
 
-            {/* Columna de vista previa. `position: sticky` la deja fija en
-                pantalla mientras la izquierda hace scroll —así no hay que
-                bajar hasta el fondo para ver el resultado de cada cambio.
+            {/* Columna de vista previa: solo controla el ancho y deja que la
+                fila la estire de alto (ver la nota de arriba). El `sticky`
+                de verdad vive en el envoltorio interno — necesita una caja
+                exterior más alta que su propio contenido para tener "sitio"
+                donde quedarse pegado mientras la izquierda hace scroll,
+                cosa que un `div` de un solo nivel no puede darse a sí mismo.
                 `flexWrap: "wrap"` en el contenedor de arriba es lo que hace
                 que esto se caiga a una fila propia (debajo, ancho completo)
                 en vez de apretarse cuando no hay sitio — el mismo
                 comportamiento de antes en pantallas angostas. */}
-            <div style={{ flex: "1 1 340px", position: "sticky", top: 0, alignSelf: "flex-start" }}>
+            <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+              <div style={{ position: "sticky", top: 0 }}>
                 <Forms.FormTitle tag="h3">Vista previa</Forms.FormTitle>
                 <Text variant="text-xs/normal" className={Margins.bottom8}>
                     Este es el componente real de Discord, no una imitación.
@@ -1792,6 +1803,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         isTryItOut={true}
                     />
                 </div>
+              </div>
             </div>
         </div>
     );
