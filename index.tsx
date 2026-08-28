@@ -108,6 +108,13 @@ function getOwnProfile(): XcordProfile {
             const parsed = JSON.parse(raw) as XcordProfile;
             // El id puede faltar si el perfil se creó antes de tener sesión.
             if (!parsed.userId) parsed.userId = userId;
+            // Perfiles guardados antes de migrar el nombre al motor nativo
+            // traen displayName con la forma vieja ({fill, effect}, sin
+            // effectId/colors). Descartarlo acá, una sola vez, evita que
+            // cualquier lector de XcordProfile tenga que blindarse contra
+            // datos con la forma equivocada.
+            if (parsed.displayName && !isNativeNameEffect(parsed.displayName))
+                delete parsed.displayName;
             return (ownProfile = parsed);
         }
     } catch {
@@ -220,13 +227,19 @@ function hexToUint(hex: string): number {
     return parseInt(hex.replace("#", ""), 16) || 0;
 }
 
+/** Descarta cualquier cosa que no tenga de verdad la forma de NativeNameEffect. */
+function isNativeNameEffect(value: unknown): value is NonNullable<XcordProfile["displayName"]> {
+    const v = value as any;
+    return !!v && typeof v.effectId === "number" && Array.isArray(v.colors);
+}
+
 /**
  * El objeto que `UserStore.getUser` devolvería de tener Nitro con este
  * efecto puesto de verdad — mismo formato que `user.displayNameStyles`,
  * confirmado leyendo una cuenta real desde la consola.
  */
 function toDiscordNameEffect(effect: XcordProfile["displayName"]) {
-    if (!effect) return undefined;
+    if (!isNativeNameEffect(effect)) return undefined;
     // Discord siempre trae 5 casillas (una por gotero en su propio editor);
     // las que faltan se completan en 0, que es como codifica "sin usar".
     const colors = [0, 0, 0, 0, 0];
@@ -246,19 +259,27 @@ const userOverrideCache = new Map<string, { rawUser: unknown; merged: unknown; }
 function xcordOverrideUser(user: any, userId: string): any {
     if (!user) return user;
 
-    const effect = toDiscordNameEffect(resolveProfile(userId)?.displayName);
-    // Camino rápido: la inmensa mayoría de los usuarios que se consultan no
-    // tienen nada puesto por xcord — devolver el objeto tal cual, sin ni
-    // siquiera tocar el caché, es lo mismo que hacía Discord antes de este
-    // parche.
-    if (!effect) return user;
+    // `getUser` es de las funciones más llamadas de todo Discord —desde el
+    // arranque mismo—, así que un fallo acá adentro (perfil corrupto, dato
+    // con forma inesperada) no puede escapar como excepción: tumbaría el
+    // cliente entero en vez de, como mucho, un nombre sin el efecto puesto.
+    try {
+        const effect = toDiscordNameEffect(resolveProfile(userId)?.displayName);
+        // Camino rápido: la inmensa mayoría de los usuarios que se consultan
+        // no tienen nada puesto por xcord — devolver el objeto tal cual, sin
+        // ni siquiera tocar el caché, es lo mismo que hacía Discord antes de
+        // este parche.
+        if (!effect) return user;
 
-    const cached = userOverrideCache.get(userId);
-    if (cached && cached.rawUser === user) return cached.merged;
+        const cached = userOverrideCache.get(userId);
+        if (cached && cached.rawUser === user) return cached.merged;
 
-    const merged = virtualMerge(user, { displayNameStyles: effect });
-    userOverrideCache.set(userId, { rawUser: user, merged });
-    return merged;
+        const merged = virtualMerge(user, { displayNameStyles: effect });
+        userOverrideCache.set(userId, { rawUser: user, merged });
+        return merged;
+    } catch {
+        return user;
+    }
 }
 
 const syncActions = {
