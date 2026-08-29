@@ -44,6 +44,25 @@ const ProfileModal = findComponentByCodeLazy<ProfileModalProps>(
     "isTryItOut:", "pendingThemeColors:", "pendingAvatarDecoration:", "EDIT_PROFILE_BANNER"
 );
 
+interface UserNameWithEffectsProps {
+    userName: string;
+    displayNameStyles?: { fontId: number; effectId: number; colors: number[]; };
+    effectDisplayType?: number;
+    loop?: boolean;
+}
+
+/**
+ * El mismo componente que pinta el nombre con efectos en todo Discord
+ * (perfil, mensajes, lista de miembros) — confirmado en vivo caminando el
+ * fiber de React desde el preview nativo de la pantalla de personalización.
+ * Reusarlo acá es lo único que garantiza que el degradado/prisma/etc. se vea
+ * igual en nuestra vista previa que en el resto del cliente.
+ */
+const UserNameWithEffects = findComponentByCodeLazy<UserNameWithEffectsProps>("data-username-with-effects");
+
+/** `2` = ANIMATED, confirmado leyendo `effectDisplayType` en el preview nativo real. */
+const EFFECT_DISPLAY_TYPE_ANIMATED = 2;
+
 const FILL_KINDS = [
     { label: "Color plano", value: "solid" },
     { label: "Degradado lineal", value: "linear" },
@@ -908,6 +927,65 @@ function nameEffectPreviewCss(colors: string[], count: number): string {
 }
 
 /**
+ * Vista previa de cómo se ve el efecto en un mensaje y en la lista de
+ * miembros — los dos sitios que el preview de perfil (más abajo) no cubre.
+ *
+ * El nombre lo pinta `UserNameWithEffects`, el mismo componente que usa
+ * Discord en esos dos sitios de verdad: por eso el degradado, el brillo o el
+ * Prisma animado se ven exactamente iguales acá que en el resto del
+ * cliente. El resto —avatar, burbuja, fila— es maquetado propio, liviano a
+ * propósito: intentar reusar los componentes reales de mensaje y lista de
+ * miembros exigiría los mismos datos de sesión real (canal, guild, store de
+ * mensajes) que la propia pantalla de Discord, y no vale la pena solo para
+ * un preview.
+ */
+function NativeNamePreview({ effect }: { effect: NativeNameEffect; }) {
+    const user = UserStore.getCurrentUser();
+    if (!user) return null;
+
+    const colors = [0, 0, 0, 0, 0];
+    effect.colors.slice(0, 5).forEach((hex, i) => { colors[i] = hexToInt(hex); });
+
+    const nameProps = {
+        userName: user.globalName || user.username,
+        displayNameStyles: { fontId: effect.fontId ?? 0, effectId: effect.effectId, colors },
+        effectDisplayType: EFFECT_DISPLAY_TYPE_ANIMATED,
+        loop: true
+    };
+    const avatarUrl = user.getAvatarURL?.(undefined, 64) ?? "";
+
+    return (
+        <div className={Margins.top8} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{
+                display: "flex", gap: "12px", padding: "8px 12px",
+                borderRadius: "8px", background: "var(--background-secondary)"
+            }}>
+                <img src={avatarUrl} alt="" style={{ width: "40px", height: "40px", borderRadius: "50%", flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                        <UserNameWithEffects {...nameProps} />
+                        <Text variant="text-xs/normal" style={{ color: "var(--text-muted)" }}>
+                            hoy a las 12:00
+                        </Text>
+                    </div>
+                    <Text variant="text-sm/normal" style={{ color: "var(--text-normal)" }}>
+                        Así se ve tu nombre en los mensajes
+                    </Text>
+                </div>
+            </div>
+
+            <div style={{
+                display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px",
+                borderRadius: "8px", background: "var(--background-secondary)"
+            }}>
+                <img src={avatarUrl} alt="" style={{ width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0 }} />
+                <UserNameWithEffects {...nameProps} />
+            </div>
+        </div>
+    );
+}
+
+/**
  * Editor del efecto nativo de nombre de Nitro.
  *
  * A diferencia del resto de los estilos de texto de xcord (CSS propio, solo
@@ -986,6 +1064,11 @@ function NativeNameEffectEditor({ effect, onChange }: {
                             />
                         ))}
                     </Flex>
+
+                    <Forms.FormTitle tag="h5" className={Margins.top16}>
+                        Vista previa en mensajes y lista de miembros
+                    </Forms.FormTitle>
+                    <NativeNamePreview effect={current} />
                 </div>
             )}
         </section>
