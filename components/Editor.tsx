@@ -806,20 +806,24 @@ function CatalogGrid({ entries, selected, onSelect }: {
  * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
  * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
  *
- * Reproduce el modelo real de Discord (visto en el CSS calculado del
- * `previewContainer` nativo), no una aproximación: el contenedor reserva el
- * desborde como `padding` en sus cuatro lados —así el avatar de muestra
- * ocupa exactamente el área "segura"—, y cada capa mide el 100% de ese
- * mismo contenedor pero se desplaza hacia afuera con un `top`/`bottom`
- * negativo, empujándose hacia la zona reservada por el padding en vez de
- * ensancharse. Ojo con un detalle de CSS: `top`/`bottom` en porcentaje se
- * calculan contra la ALTURA del contenedor, no el ancho —por eso la casilla
- * tiene que ser cuadrada (`aspectRatio: "1"` en `CatalogTile`), igual que
- * hace Discord con `cqw` para forzar que todo escale contra el ancho.
+ * Reproduce el modelo real de Discord, confirmado con el CSS calculado del
+ * `previewContainer` nativo: el contenedor reserva el desborde como
+ * `padding` en sus cuatro lados —así el avatar de muestra ocupa
+ * exactamente el área "segura"—, y cada capa mide el 100% de ese mismo
+ * contenedor pero se desplaza hacia afuera con un `top`/`bottom` negativo,
+ * empujándose hacia la zona reservada por el padding en vez de ensancharse.
+ *
+ * El propio Discord usa unidades de container query (`cqw`) para ese
+ * desplazamiento en vez de porcentaje simple: en CSS, `top`/`bottom` en
+ * porcentaje se calculan contra la ALTURA del contenedor, no el ancho, así
+ * que sin esto el resultado se rompe en cuanto la casilla no es
+ * perfectamente cuadrada. `cqw` fuerza que todo —alto y ancho— escale
+ * contra el ancho del contenedor, que es lo que la matemática de Discord
+ * (basada en `innerWidth`) espera en los cuatro lados.
  */
 function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const frame = entry.frame!;
-    const pct = (v: number) => (v / frame.innerWidth) * 100;
+    const cqw = (v: number) => `${(v / frame.innerWidth) * 100}cqw`;
     // El avatar de muestra genérico de Discord vive en un recurso interno que
     // no es estable entre builds —la URL que sacamos del HTML del preview
     // nativo ya no cargaba—; el propio avatar del usuario es igual de válido
@@ -838,7 +842,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
                 right: 0,
                 width: "100%",
                 [layer.anchor === "top" ? "top" : "bottom"]:
-                    `-${pct(layer.anchor === "top" ? frame.overflowTop : frame.overflowBottom)}%`,
+                    `-${cqw(layer.anchor === "top" ? frame.overflowTop : frame.overflowBottom)}`,
                 zIndex: layer.order === "front" ? 2 : 0,
                 pointerEvents: "none"
             }}
@@ -846,16 +850,16 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     );
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", containerType: "inline-size" } as any}>
             <div
                 style={{
                     position: "relative",
                     width: "100%",
                     height: "100%",
                     boxSizing: "border-box",
-                    paddingTop: `${pct(frame.overflowTop)}%`,
-                    paddingBottom: `${pct(frame.overflowBottom)}%`,
-                    paddingInline: `${pct(frame.overflowHorizontal)}%`
+                    paddingTop: cqw(frame.overflowTop),
+                    paddingBottom: cqw(frame.overflowBottom),
+                    paddingInline: cqw(frame.overflowHorizontal)
                 }}
             >
                 <img
