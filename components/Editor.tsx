@@ -771,10 +771,14 @@ function CatalogGrid({ entries, selected, onSelect }: {
             style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
-                gap: "6px",
+                // Los marcos se salen del cuadrado de su propia casilla a
+                // propósito —es la misma cuadrícula nativa de Discord la que
+                // les deja aire alrededor en vez de recortarlos—; sin este
+                // espacio de más, cada marco se pisaría con el de al lado.
+                gap: "20px",
                 maxHeight: "260px",
                 overflowY: "auto",
-                padding: "4px"
+                padding: "16px 4px"
             }}
         >
             <Clickable
@@ -850,7 +854,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     );
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", containerType: "inline-size" } as any}>
+        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "visible", containerType: "inline-size" } as any}>
             <div
                 style={{
                     position: "relative",
@@ -904,7 +908,13 @@ function CatalogTile({ entry, selected, onSelect }: {
             style={{
                 aspectRatio: "1",
                 borderRadius: "6px",
-                overflow: "hidden",
+                // Los marcos se salen a propósito del cuadrado de su propia
+                // casilla —confirmado con el HTML real de "Explora la
+                // tienda": cada fila del grid nativo reserva ~12px de aire
+                // alrededor de una casilla de 80px para que el dibujo no se
+                // recorte—. Recortar acá tapaba justo la parte que hace que
+                // el marco se vea completo.
+                overflow: entry.frame ? "visible" : "hidden",
                 border: `2px solid ${selected ? "var(--brand-500)" : "transparent"}`,
                 background: "var(--background-secondary)"
             }}
