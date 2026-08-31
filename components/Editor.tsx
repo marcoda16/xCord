@@ -803,12 +803,6 @@ function CatalogGrid({ entries, selected, onSelect }: {
 }
 
 /**
- * El avatar de muestra genérico que usa el propio Discord para previsualizar
- * marcos, visto en su cuadrícula nativa de selección de marco preestablecido.
- */
-const SAMPLE_AVATAR_URL = "https://cdn.discordapp.com/assets/content/a859611882903f1102a796c08c68278917821af3e87eb9191df74bf78426971d.png";
-
-/**
  * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
  * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
  *
@@ -825,6 +819,11 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     // Deja aire alrededor del avatar de muestra para que el marco tenga
     // dónde lucirse en vez de quedar recortado contra el borde de la casilla.
     const inset = Math.max(overflowTopPct, overflowBottomPct, overflowHorizontalPct);
+    // El avatar de muestra genérico de Discord vive en un recurso interno que
+    // no es estable entre builds —la URL que sacamos del HTML del preview
+    // nativo ya no cargaba—; el propio avatar del usuario es igual de válido
+    // para la vista previa y no depende de ningún hash adivinado.
+    const sampleAvatarUrl = UserStore.getCurrentUser()?.getAvatarURL?.(undefined, 80) ?? "";
 
     const renderLayer = (layer: CardBorderLayer) => (
         <img
@@ -847,7 +846,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
             {frame.layers.filter(l => l.order === "back").map(renderLayer)}
             <img
-                src={SAMPLE_AVATAR_URL}
+                src={sampleAvatarUrl}
                 alt=""
                 loading="lazy"
                 style={{
