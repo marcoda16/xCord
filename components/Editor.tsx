@@ -21,7 +21,7 @@ import type { PluginNative } from "@utils/types";
 
 import { fillToCss, fillToThemeColors } from "../lib/css";
 import { applyPreview, clearPreview, PREVIEW_CLASS, setDraftOverride } from "../lib/store";
-import type { CardBorder, DynamicBackground, Fill, NativeEffectId, NativeNameEffect, XcordProfile } from "../types";
+import type { CardBorder, CardBorderLayer, DynamicBackground, Fill, NativeEffectId, NativeNameEffect, XcordProfile } from "../types";
 import { emptyProfile } from "../types";
 
 interface ProfileModalProps {
@@ -333,6 +333,13 @@ export interface CatalogEntry {
     palette?: string;
     /** Hash de la imagen de vista previa, si el catálogo la trae. */
     thumbnail?: string;
+    /**
+     * Solo bordes: las mismas capas y medidas de desborde que ya pedimos al
+     * elegir un borde de verdad (`fetchCardBorder`), pero capturadas acá
+     * mismo durante el escaneo del catálogo — vienen en la misma respuesta,
+     * así que arman el preview compuesto sin ninguna petición aparte.
+     */
+    frame?: { layers: CardBorderLayer[]; overflowTop: number; overflowBottom: number; overflowHorizontal: number; innerWidth: number; };
 }
 
 interface Catalog {
@@ -428,12 +435,29 @@ function scanCatalog(node: any, out: Catalog, depth = 0, title = "") {
             ? `${SHOP_CDN}/${skuId}/static`
             : undefined;
 
+        // Las mismas capas y desbordes que ya pedíamos aparte al aplicar un
+        // borde de verdad —confirmado con la respuesta real de
+        // `/collectibles-products/{sku}`— ya vienen en esta misma respuesta.
+        const frame = item?.type === COLLECTIBLE_BORDER && Array.isArray(item?.layers)
+            ? {
+                layers: item.layers.map((l: any) => ({
+                    id: String(l.id),
+                    anchor: l.anchor === "bottom" ? "bottom" as const : "top" as const,
+                    order: l.order === "front" ? "front" as const : "back" as const
+                })),
+                overflowTop: Number(item.overflow_top) || 0,
+                overflowBottom: Number(item.overflow_bottom) || 0,
+                overflowHorizontal: Number(item.overflow_horizontal) || 0,
+                innerWidth: Number(item.inner_width) || 1200
+            }
+            : undefined;
+
         const thumbnail = item?.type === COLLECTIBLE_DECORATION && asset
             ? `${DECORATION_CDN}/${asset}.png?size=80&passthrough=true`
             : findThumbnail(item) ?? findThumbnail(node) ?? borderGuess;
 
         if (!bucket.some(e => e.id === String(skuId)))
-            bucket.push({ id: String(skuId), title, thumbnail, asset, palette });
+            bucket.push({ id: String(skuId), title, thumbnail, asset, palette, frame });
     }
 
     for (const value of Object.values(node)) scanCatalog(value, out, depth + 1, label);
@@ -779,6 +803,68 @@ function CatalogGrid({ entries, selected, onSelect }: {
 }
 
 /**
+ * El avatar de muestra genérico que usa el propio Discord para previsualizar
+ * marcos, visto en su cuadrícula nativa de selección de marco preestablecido.
+ */
+const SAMPLE_AVATAR_URL = "https://cdn.discordapp.com/assets/content/a859611882903f1102a796c08c68278917821af3e87eb9191df74bf78426971d.png";
+
+/**
+ * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
+ * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
+ *
+ * No reproducimos las clases CSS reales de Discord —están minificadas y
+ * cambian con cada build—, sino la misma idea con porcentajes propios: cada
+ * capa se agranda y desplaza según su desborde relativo a `innerWidth`, así
+ * que escala igual sin importar el tamaño real de la casilla.
+ */
+function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
+    const frame = entry.frame!;
+    const overflowTopPct = (frame.overflowTop / frame.innerWidth) * 100;
+    const overflowBottomPct = (frame.overflowBottom / frame.innerWidth) * 100;
+    const overflowHorizontalPct = (frame.overflowHorizontal / frame.innerWidth) * 100;
+    // Deja aire alrededor del avatar de muestra para que el marco tenga
+    // dónde lucirse en vez de quedar recortado contra el borde de la casilla.
+    const inset = Math.max(overflowTopPct, overflowBottomPct, overflowHorizontalPct);
+
+    const renderLayer = (layer: CardBorderLayer) => (
+        <img
+            key={layer.id}
+            src={`${SHOP_CDN}/${entry.id}/${layer.id}/static`}
+            alt=""
+            loading="lazy"
+            style={{
+                position: "absolute",
+                left: `-${overflowHorizontalPct}%`,
+                width: `${100 + overflowHorizontalPct * 2}%`,
+                [layer.anchor === "top" ? "top" : "bottom"]:
+                    `-${layer.anchor === "top" ? overflowTopPct : overflowBottomPct}%`,
+                pointerEvents: "none"
+            }}
+        />
+    );
+
+    return (
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            {frame.layers.filter(l => l.order === "back").map(renderLayer)}
+            <img
+                src={SAMPLE_AVATAR_URL}
+                alt=""
+                loading="lazy"
+                style={{
+                    position: "absolute",
+                    inset: `${inset}%`,
+                    width: `${100 - inset * 2}%`,
+                    height: `${100 - inset * 2}%`,
+                    objectFit: "cover",
+                    borderRadius: "8px"
+                }}
+            />
+            {frame.layers.filter(l => l.order === "front").map(renderLayer)}
+        </div>
+    );
+}
+
+/**
  * Una casilla del catálogo, con su propio estado de "la imagen no cargó".
  *
  * Hace falta como componente aparte —no en línea dentro del `.map`— porque
@@ -806,7 +892,9 @@ function CatalogTile({ entry, selected, onSelect }: {
                 background: "var(--background-secondary)"
             }}
         >
-            {showImage ? (
+            {entry.frame ? (
+                <BorderFramePreview entry={entry} />
+            ) : showImage ? (
                 <img
                     src={entry.thumbnail}
                     alt={entry.title}
