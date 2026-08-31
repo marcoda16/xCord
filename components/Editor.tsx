@@ -773,12 +773,13 @@ function CatalogGrid({ entries, selected, onSelect }: {
                 gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
                 // Los marcos se salen del cuadrado de su propia casilla a
                 // propósito —es la misma cuadrícula nativa de Discord la que
-                // les deja aire alrededor en vez de recortarlos—; sin este
-                // espacio de más, cada marco se pisaría con el de al lado.
-                gap: "20px",
+                // les deja aire alrededor en vez de recortarlos—; el gap de
+                // 12px es el mismo que usa la cuadrícula nativa de "Explora
+                // la tienda" entre casillas de 80px.
+                gap: "12px",
                 maxHeight: "260px",
                 overflowY: "auto",
-                padding: "16px 4px"
+                padding: "8px 4px"
             }}
         >
             <Clickable
@@ -828,11 +829,6 @@ function CatalogGrid({ entries, selected, onSelect }: {
 function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const frame = entry.frame!;
     const cqw = (v: number) => `${(v / frame.innerWidth) * 100}cqw`;
-    // El avatar de muestra genérico de Discord vive en un recurso interno que
-    // no es estable entre builds —la URL que sacamos del HTML del preview
-    // nativo ya no cargaba—; el propio avatar del usuario es igual de válido
-    // para la vista previa y no depende de ningún hash adivinado.
-    const sampleAvatarUrl = UserStore.getCurrentUser()?.getAvatarURL?.(undefined, 80) ?? "";
 
     const renderLayer = (layer: CardBorderLayer) => (
         <img
@@ -866,19 +862,23 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
                     paddingInline: cqw(frame.overflowHorizontal)
                 }}
             >
-                <img
-                    src={sampleAvatarUrl}
-                    alt=""
-                    loading="lazy"
+                <div
                     style={{
                         position: "relative",
                         zIndex: 1,
                         width: "100%",
                         height: "100%",
-                        objectFit: "cover",
-                        borderRadius: "4px"
+                        borderRadius: "4px",
+                        background: "var(--background-tertiary)",
+                        display: "grid",
+                        placeItems: "center"
                     }}
-                />
+                >
+                    <svg viewBox="0 0 24 24" width="55%" height="55%" fill="var(--background-secondary-alt)">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4v-1z" />
+                    </svg>
+                </div>
                 {frame.layers.map(renderLayer)}
             </div>
         </div>
