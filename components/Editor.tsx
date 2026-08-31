@@ -780,7 +780,7 @@ function CatalogGrid({ entries, selected, onSelect }: {
             <Clickable
                 onClick={() => onSelect("")}
                 style={{
-                    height: "72px",
+                    aspectRatio: "1",
                     display: "grid",
                     placeItems: "center",
                     borderRadius: "6px",
@@ -806,19 +806,20 @@ function CatalogGrid({ entries, selected, onSelect }: {
  * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
  * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
  *
- * No reproducimos las clases CSS reales de Discord —están minificadas y
- * cambian con cada build—, sino la misma idea con porcentajes propios: cada
- * capa se agranda y desplaza según su desborde relativo a `innerWidth`, así
- * que escala igual sin importar el tamaño real de la casilla.
+ * Reproduce el modelo real de Discord (visto en el CSS calculado del
+ * `previewContainer` nativo), no una aproximación: el contenedor reserva el
+ * desborde como `padding` en sus cuatro lados —así el avatar de muestra
+ * ocupa exactamente el área "segura"—, y cada capa mide el 100% de ese
+ * mismo contenedor pero se desplaza hacia afuera con un `top`/`bottom`
+ * negativo, empujándose hacia la zona reservada por el padding en vez de
+ * ensancharse. Ojo con un detalle de CSS: `top`/`bottom` en porcentaje se
+ * calculan contra la ALTURA del contenedor, no el ancho —por eso la casilla
+ * tiene que ser cuadrada (`aspectRatio: "1"` en `CatalogTile`), igual que
+ * hace Discord con `cqw` para forzar que todo escale contra el ancho.
  */
 function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const frame = entry.frame!;
-    const overflowTopPct = (frame.overflowTop / frame.innerWidth) * 100;
-    const overflowBottomPct = (frame.overflowBottom / frame.innerWidth) * 100;
-    const overflowHorizontalPct = (frame.overflowHorizontal / frame.innerWidth) * 100;
-    // Deja aire alrededor del avatar de muestra para que el marco tenga
-    // dónde lucirse en vez de quedar recortado contra el borde de la casilla.
-    const inset = Math.max(overflowTopPct, overflowBottomPct, overflowHorizontalPct);
+    const pct = (v: number) => (v / frame.innerWidth) * 100;
     // El avatar de muestra genérico de Discord vive en un recurso interno que
     // no es estable entre builds —la URL que sacamos del HTML del preview
     // nativo ya no cargaba—; el propio avatar del usuario es igual de válido
@@ -833,32 +834,45 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
             loading="lazy"
             style={{
                 position: "absolute",
-                left: `-${overflowHorizontalPct}%`,
-                width: `${100 + overflowHorizontalPct * 2}%`,
+                left: 0,
+                right: 0,
+                width: "100%",
                 [layer.anchor === "top" ? "top" : "bottom"]:
-                    `-${layer.anchor === "top" ? overflowTopPct : overflowBottomPct}%`,
+                    `-${pct(layer.anchor === "top" ? frame.overflowTop : frame.overflowBottom)}%`,
+                zIndex: layer.order === "front" ? 2 : 0,
                 pointerEvents: "none"
             }}
         />
     );
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            {frame.layers.filter(l => l.order === "back").map(renderLayer)}
-            <img
-                src={sampleAvatarUrl}
-                alt=""
-                loading="lazy"
+        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+            <div
                 style={{
-                    position: "absolute",
-                    inset: `${inset}%`,
-                    width: `${100 - inset * 2}%`,
-                    height: `${100 - inset * 2}%`,
-                    objectFit: "cover",
-                    borderRadius: "8px"
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    boxSizing: "border-box",
+                    paddingTop: `${pct(frame.overflowTop)}%`,
+                    paddingBottom: `${pct(frame.overflowBottom)}%`,
+                    paddingInline: `${pct(frame.overflowHorizontal)}%`
                 }}
-            />
-            {frame.layers.filter(l => l.order === "front").map(renderLayer)}
+            >
+                <img
+                    src={sampleAvatarUrl}
+                    alt=""
+                    loading="lazy"
+                    style={{
+                        position: "relative",
+                        zIndex: 1,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        borderRadius: "4px"
+                    }}
+                />
+                {frame.layers.map(renderLayer)}
+            </div>
         </div>
     );
 }
@@ -884,7 +898,7 @@ function CatalogTile({ entry, selected, onSelect }: {
         <Clickable
             onClick={onSelect}
             style={{
-                height: "72px",
+                aspectRatio: "1",
                 borderRadius: "6px",
                 overflow: "hidden",
                 border: `2px solid ${selected ? "var(--brand-500)" : "transparent"}`,
