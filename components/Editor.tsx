@@ -784,7 +784,12 @@ function CatalogGrid({ entries, selected, onSelect }: {
                 columnGap: "12px",
                 maxHeight: "260px",
                 overflowY: "auto",
-                padding: "8px 4px"
+                // El desborde visual de los marcos no cuenta para el alto
+                // scrolleable del grid (solo lo hacen las casillas en sí),
+                // así que sin este padding extra abajo el desborde de la
+                // última fila se corta contra el borde del scroll sin que
+                // haya manera de bajar más para revelarlo.
+                padding: "8px 4px 32px"
             }}
         >
             <Clickable
