@@ -771,25 +771,15 @@ function CatalogGrid({ entries, selected, onSelect }: {
             style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
-                // Los marcos se salen del cuadrado de su propia casilla a
-                // propósito. El gap horizontal de 12px es el mismo que usa
-                // la cuadrícula nativa de "Explora la tienda" —ahí el
-                // desborde de cada marco es chico porque las casillas viven
-                // en una fila fija—, pero acá el ancho de casilla varía con
-                // el ancho del panel, así que el desborde vertical (que
-                // escala con ese ancho) puede superar esos 12px y pisar la
-                // fila de abajo. Un gap vertical más grande evita ese
-                // choque sin tocar el horizontal.
-                rowGap: "32px",
-                columnGap: "12px",
+                // El gap de 12px es el mismo que usa la cuadrícula nativa de
+                // "Explora la tienda" entre casillas de 80px. El espacio
+                // extra que necesita el desborde de cada marco ya no se
+                // reserva acá con un valor fijo —viene del margin-top/bottom
+                // que cada `CatalogTile` calcula según su propio marco.
+                gap: "12px",
                 maxHeight: "260px",
                 overflowY: "auto",
-                // El desborde visual de los marcos no cuenta para el alto
-                // scrolleable del grid (solo lo hacen las casillas en sí),
-                // así que sin este padding extra abajo el desborde de la
-                // última fila se corta contra el borde del scroll sin que
-                // haya manera de bajar más para revelarlo.
-                padding: "8px 4px 32px"
+                padding: "8px 4px"
             }}
         >
             <Clickable
@@ -911,6 +901,7 @@ function CatalogTile({ entry, selected, onSelect }: {
 }) {
     const [failed, setFailed] = useState(false);
     const showImage = entry.thumbnail && !failed;
+    const frame = entry.frame;
 
     return (
         <Clickable
@@ -920,13 +911,23 @@ function CatalogTile({ entry, selected, onSelect }: {
                 borderRadius: "6px",
                 // Los marcos se salen a propósito del cuadrado de su propia
                 // casilla —confirmado con el HTML real de "Explora la
-                // tienda": cada fila del grid nativo reserva ~12px de aire
-                // alrededor de una casilla de 80px para que el dibujo no se
-                // recorte—. Recortar acá tapaba justo la parte que hace que
+                // tienda"—. Recortar acá tapaba justo la parte que hace que
                 // el marco se vea completo.
-                overflow: entry.frame ? "visible" : "hidden",
+                overflow: frame ? "visible" : "hidden",
                 border: `2px solid ${selected ? "var(--brand-500)" : "transparent"}`,
-                background: "var(--background-secondary)"
+                background: "var(--background-secondary)",
+                // Cada marco desborda una cantidad distinta —algunos apenas
+                // un poco, otros mucho más—, así que un gap fijo entre filas
+                // o le sobra a los chicos o le falta a los grandes. Reservar
+                // acá exactamente lo que ESTE marco necesita evita las dos
+                // cosas. El porcentaje de margin-top/bottom se calcula
+                // contra el ANCHO del contenedor (a diferencia de top/bottom
+                // en posicionamiento absoluto, que usan el alto), que es
+                // justo la base que usa la matemática de Discord.
+                ...(frame && {
+                    marginTop: `${(frame.overflowTop / frame.innerWidth) * 100}%`,
+                    marginBottom: `${(frame.overflowBottom / frame.innerWidth) * 100}%`
+                })
             }}
         >
             {entry.frame ? (
