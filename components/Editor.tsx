@@ -779,11 +779,7 @@ function CatalogGrid({ entries, selected, onSelect }: {
                 gap: "12px",
                 // Sin esto, cada casilla se estira hasta la altura de su
                 // fila (el `stretch` que trae el grid de fábrica) y su
-                // `aspect-ratio: 1` deja de valer. Con márgenes distintos
-                // por casilla las filas quedan desparejas, así que las
-                // casillas terminaban rectangulares y alargadas —y la
-                // matemática del marco, que escala todo contra el ancho
-                // asumiendo una casilla cuadrada, se descalibraba.
+                // `aspect-ratio: 1` deja de valer.
                 alignItems: "start",
                 maxHeight: "260px",
                 overflowY: "auto",
@@ -819,20 +815,25 @@ function CatalogGrid({ entries, selected, onSelect }: {
  * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
  * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
  *
- * Reproduce el modelo real de Discord, confirmado con el CSS calculado del
- * `previewContainer` nativo: el contenedor reserva el desborde como
- * `padding` en sus cuatro lados —así el avatar de muestra ocupa
- * exactamente el área "segura"—, y cada capa mide el 100% de ese mismo
- * contenedor pero se desplaza hacia afuera con un `top`/`bottom` negativo,
- * empujándose hacia la zona reservada por el padding en vez de ensancharse.
+ * El contenedor reserva el desborde del marco como `padding` en sus cuatro
+ * lados —así el avatar de muestra ocupa exactamente el área "segura"— y
+ * cada capa se ancla contra el borde exterior de ese contenedor, ocupando
+ * la franja que el padding dejó libre.
  *
- * El propio Discord usa unidades de container query (`cqw`) para ese
- * desplazamiento en vez de porcentaje simple: en CSS, `top`/`bottom` en
- * porcentaje se calculan contra la ALTURA del contenedor, no el ancho, así
- * que sin esto el resultado se rompe en cuanto la casilla no es
- * perfectamente cuadrada. `cqw` fuerza que todo —alto y ancho— escale
- * contra el ancho del contenedor, que es lo que la matemática de Discord
- * (basada en `innerWidth`) espera en los cuatro lados.
+ * Discord ancla sus capas con un `top`/`bottom` NEGATIVO en vez de contra
+ * el borde exterior, porque en la tarjeta de perfil real el contenedor de
+ * las capas es el área interior, no la que incluye el desborde. Acá el
+ * contenedor ya abarca el desborde entero, así que anclar en 0 deja la
+ * capa justo donde va; un valor negativo la empujaría fuera de la casilla,
+ * que es lo que hacía que los marcos más grandes se desbordaran sobre sus
+ * vecinos (cuánto se salían dependía del alto intrínseco de cada imagen,
+ * así que ningún margen fijo alcanzaba para todos).
+ *
+ * Las medidas van en unidades de container query (`cqw`) y no en
+ * porcentaje simple: el padding vertical en porcentaje se calcula contra
+ * el ANCHO del contenedor, pero mezclarlo con otras propiedades que usan
+ * el alto es frágil; `cqw` fuerza que todo escale contra el ancho, que es
+ * la base que espera la matemática de Discord (`innerWidth`).
  */
 function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const frame = entry.frame!;
@@ -849,8 +850,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
                 left: 0,
                 right: 0,
                 width: "100%",
-                [layer.anchor === "top" ? "top" : "bottom"]:
-                    `-${cqw(layer.anchor === "top" ? frame.overflowTop : frame.overflowBottom)}`,
+                [layer.anchor === "top" ? "top" : "bottom"]: 0,
                 zIndex: layer.order === "front" ? 2 : 0,
                 pointerEvents: "none"
             }}
@@ -858,7 +858,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     );
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "visible", containerType: "inline-size" } as any}>
+        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", containerType: "inline-size" } as any}>
             <div
                 style={{
                     position: "relative",
@@ -909,7 +909,6 @@ function CatalogTile({ entry, selected, onSelect }: {
 }) {
     const [failed, setFailed] = useState(false);
     const showImage = entry.thumbnail && !failed;
-    const frame = entry.frame;
 
     return (
         <Clickable
@@ -917,25 +916,9 @@ function CatalogTile({ entry, selected, onSelect }: {
             style={{
                 aspectRatio: "1",
                 borderRadius: "6px",
-                // Los marcos se salen a propósito del cuadrado de su propia
-                // casilla —confirmado con el HTML real de "Explora la
-                // tienda"—. Recortar acá tapaba justo la parte que hace que
-                // el marco se vea completo.
-                overflow: frame ? "visible" : "hidden",
+                overflow: "hidden",
                 border: `2px solid ${selected ? "var(--brand-500)" : "transparent"}`,
-                background: "var(--background-secondary)",
-                // Cada marco desborda una cantidad distinta —algunos apenas
-                // un poco, otros mucho más—, así que un gap fijo entre filas
-                // o le sobra a los chicos o le falta a los grandes. Reservar
-                // acá exactamente lo que ESTE marco necesita evita las dos
-                // cosas. El porcentaje de margin-top/bottom se calcula
-                // contra el ANCHO del contenedor (a diferencia de top/bottom
-                // en posicionamiento absoluto, que usan el alto), que es
-                // justo la base que usa la matemática de Discord.
-                ...(frame && {
-                    marginTop: `${(frame.overflowTop / frame.innerWidth) * 100}%`,
-                    marginBottom: `${(frame.overflowBottom / frame.innerWidth) * 100}%`
-                })
+                background: "var(--background-secondary)"
             }}
         >
             {entry.frame ? (
