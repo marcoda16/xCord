@@ -772,11 +772,16 @@ function CatalogGrid({ entries, selected, onSelect }: {
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
                 // Los marcos se salen del cuadrado de su propia casilla a
-                // propósito —es la misma cuadrícula nativa de Discord la que
-                // les deja aire alrededor en vez de recortarlos—; el gap de
-                // 12px es el mismo que usa la cuadrícula nativa de "Explora
-                // la tienda" entre casillas de 80px.
-                gap: "12px",
+                // propósito. El gap horizontal de 12px es el mismo que usa
+                // la cuadrícula nativa de "Explora la tienda" —ahí el
+                // desborde de cada marco es chico porque las casillas viven
+                // en una fila fija—, pero acá el ancho de casilla varía con
+                // el ancho del panel, así que el desborde vertical (que
+                // escala con ese ancho) puede superar esos 12px y pisar la
+                // fila de abajo. Un gap vertical más grande evita ese
+                // choque sin tocar el horizontal.
+                rowGap: "32px",
+                columnGap: "12px",
                 maxHeight: "260px",
                 overflowY: "auto",
                 padding: "8px 4px"
