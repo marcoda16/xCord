@@ -777,6 +777,14 @@ function CatalogGrid({ entries, selected, onSelect }: {
                 // reserva acá con un valor fijo —viene del margin-top/bottom
                 // que cada `CatalogTile` calcula según su propio marco.
                 gap: "12px",
+                // Sin esto, cada casilla se estira hasta la altura de su
+                // fila (el `stretch` que trae el grid de fábrica) y su
+                // `aspect-ratio: 1` deja de valer. Con márgenes distintos
+                // por casilla las filas quedan desparejas, así que las
+                // casillas terminaban rectangulares y alargadas —y la
+                // matemática del marco, que escala todo contra el ancho
+                // asumiendo una casilla cuadrada, se descalibraba.
+                alignItems: "start",
                 maxHeight: "260px",
                 overflowY: "auto",
                 padding: "8px 4px"
