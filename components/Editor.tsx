@@ -1303,7 +1303,8 @@ export interface DraftController {
 }
 
 export function useProfileDraft(initial: XcordProfile, onSave: (p: XcordProfile) => void): DraftController {
-    const [draft, setDraft] = useState<XcordProfile>(initial);
+    const [draft, setDraftState] = useState<XcordProfile>(initial);
+    const draftRef = useRef(initial);
     // Lo último guardado, no lo que había al abrir: tras guardar, el editor
     // sigue abierto y "sin cambios" tiene que volver a ser cierto.
     const [saved, setSaved] = useState<XcordProfile>(initial);
@@ -1315,13 +1316,23 @@ export function useProfileDraft(initial: XcordProfile, onSave: (p: XcordProfile)
         return () => clearPreview();
     }, [draft]);
 
-    // El borrador también manda sobre lo que no es CSS —banner, tema, efecto,
-    // borde—, para que el preview los muestre sin haber guardado. Se limpia al
-    // cerrar el editor: a partir de ahí solo debe verse lo guardado de verdad.
+    // El componente nativo consulta este override DURANTE su render. Escribirlo
+    // en un effect dependiente de `draft` era demasiado tarde: primero veía el
+    // efecto anterior y solo cambiaba cuando algún render posterior coincidía.
+    // El setter lo actualiza antes de que React pinte el nuevo borrador.
+    const setDraft: DraftController["setDraft"] = updater => {
+        const next = typeof updater === "function" ? updater(draftRef.current) : updater;
+        draftRef.current = next;
+        setDraftOverride(next);
+        setDraftState(next);
+    };
+
+    // Al montar, el perfil guardado ya coincide con `initial`; dejamos el
+    // override preparado para cambios posteriores y lo retiramos solo al cerrar.
     useEffect(() => {
-        setDraftOverride(draft);
+        setDraftOverride(initial);
         return () => setDraftOverride(null);
-    }, [draft]);
+    }, []);
 
     return {
         draft,
@@ -2115,6 +2126,10 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
                 <div className={PREVIEW_CLASS}>
                     <ProfileModal
+                        // El renderer de efectos conserva estado y recursos del
+                        // sku anterior. Remontarlo solo al cambiar de efecto
+                        // evita esperar a que su transición interna expire.
+                        key={draft.profileEffectId ?? "xcord-no-profile-effect"}
                         user={UserStore.getCurrentUser()}
                         // El fondo no va por CSS sino por el tema nativo, que se lee
                         // del store — y el store solo conoce el perfil guardado. Esta

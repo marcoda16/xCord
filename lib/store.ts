@@ -57,6 +57,7 @@ export function getProfileVersion(): number {
 }
 
 export function setDraftOverride(profile: XcordProfile | null) {
+    if (draftOverride === profile) return;
     draftOverride = profile;
     // El preview del editor lee el borrador, no lo guardado: sin esto, el
     // useMemo seguiría devolviendo lo de antes mientras editas.
