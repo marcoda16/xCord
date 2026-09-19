@@ -342,6 +342,17 @@ let pendingRetag = 0;
 let lastRetag = 0;
 
 /**
+ * Las mutaciones del chat son, con diferencia, las más frecuentes de Discord.
+ * Solo justifican repasar perfiles si el nodo añadido pertenece a uno de los
+ * perfiles que ya identificamos (o si envuelve uno al reorganizar el modal).
+ */
+function touchesKnownProfile(node: Element): boolean {
+    return roots.some(root => root.isConnected && (
+        root === node || root.contains(node) || node.contains(root)
+    ));
+}
+
+/**
  * Empieza a marcar perfiles. `onSeen` se llama una vez por perfil detectado,
  * y es el disparador para pedir el perfil de ese usuario al servidor.
  */
@@ -374,11 +385,14 @@ export function startObserver(onSeen: OnProfileSeen) {
     };
 
     observer = new MutationObserver(mutations => {
-        let touched = false;
+        let touchedProfile = false;
 
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
                 if (!(node instanceof Element)) continue;
+
+                if (!touchedProfile && touchesKnownProfile(node))
+                    touchedProfile = true;
 
                 if (node instanceof HTMLImageElement) {
                     // El nodo añadido es la propia imagen.
@@ -391,12 +405,10 @@ export function startObserver(onSeen: OnProfileSeen) {
                     // añadido — y Discord añade miles al escribir en el chat.
                     scan(node);
                 }
-
-                touched = true;
             }
         }
 
-        if (touched) scheduleRetag();
+        if (touchedProfile) scheduleRetag();
     });
 
     observer.observe(document.body, { childList: true, subtree: true });

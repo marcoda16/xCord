@@ -16,10 +16,13 @@ const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("
 const CACHE_TTL = 5 * 60 * 1000;
 /** Usuarios que ya consultamos y no tienen perfil: no volvemos a preguntar tan pronto. */
 const NEGATIVE_TTL = 30 * 60 * 1000;
+/** Evita que recorrer muchos servidores deje perfiles en memoria toda la sesión. */
+const MAX_CACHE_ENTRIES = 250;
 
 interface CacheEntry {
     profile: XcordProfile | null;
     fetchedAt: number;
+    lastAccessed: number;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -64,20 +67,38 @@ export function getDraftOverride(): XcordProfile | null {
     return draftOverride;
 }
 
-let styleEl: HTMLStyleElement | null = null;
+let globalStyleEl: HTMLStyleElement | null = null;
+let profilesStyleEl: HTMLStyleElement | null = null;
+let previewStyleEl: HTMLStyleElement | null = null;
+let profilesFlushFrame = 0;
+let previewFlushFrame = 0;
+let pendingPreview: XcordProfile | null = null;
 /** CSS ya inyectado, por usuario, para poder reemplazarlo sin reconstruir todo. */
 const injected = new Map<string, string>();
 
-function ensureStyleElement(): HTMLStyleElement {
-    if (styleEl?.isConnected) return styleEl;
-    styleEl = document.createElement("style");
-    styleEl.id = `${NS}-styles`;
-    document.head.appendChild(styleEl);
-    return styleEl;
+function ensureStyleElement(current: HTMLStyleElement | null, suffix: string): HTMLStyleElement {
+    if (current?.isConnected) return current;
+    const style = document.createElement("style");
+    style.id = `${NS}-${suffix}`;
+    document.head.appendChild(style);
+    return style;
 }
 
-function flush() {
-    ensureStyleElement().textContent = [GLOBAL_KEYFRAMES, ...injected.values()].join("\n");
+function ensureGlobalStyles() {
+    globalStyleEl = ensureStyleElement(globalStyleEl, "keyframes");
+    if (globalStyleEl.textContent !== GLOBAL_KEYFRAMES)
+        globalStyleEl.textContent = GLOBAL_KEYFRAMES;
+}
+
+/** Los perfiles remotos cambian poco; solo reconstruimos esta hoja si uno cambió. */
+function flushProfiles() {
+    if (profilesFlushFrame) return;
+    profilesFlushFrame = requestAnimationFrame(() => {
+        profilesFlushFrame = 0;
+        profilesStyleEl = ensureStyleElement(profilesStyleEl, "profiles");
+        const css = [...injected.values()].join("\n");
+        if (profilesStyleEl.textContent !== css) profilesStyleEl.textContent = css;
+    });
 }
 
 /**
@@ -91,6 +112,7 @@ function flush() {
  * bio, fondo) se queda sin aplicar aunque el avatar sí se vea bien.
  */
 const avatarUrlToUserId = new Map<string, string>();
+const avatarUrlByUserId = new Map<string, string>();
 
 export function lookupUserIdByAvatarUrl(url: string): string | undefined {
     return avatarUrlToUserId.get(url);
@@ -99,13 +121,23 @@ export function lookupUserIdByAvatarUrl(url: string): string | undefined {
 /** Aplica (o reemplaza) los estilos de un usuario en el documento. */
 export function applyProfile(profile: XcordProfile) {
     const scope = `[data-${NS}-user="${profile.userId}"]`;
-    injected.set(profile.userId, buildProfileCss(profile, scope));
-    if (profile.avatar?.image?.url) avatarUrlToUserId.set(profile.avatar.image.url, profile.userId);
-    flush();
-}
+    const css = buildProfileCss(profile, scope);
+    const changed = injected.get(profile.userId) !== css;
+    if (changed) injected.set(profile.userId, css);
 
-/** Clave reservada para el preview del editor; no es un id de usuario válido. */
-const PREVIEW_KEY = "__preview";
+    const previousAvatar = avatarUrlByUserId.get(profile.userId);
+    const nextAvatar = profile.avatar?.image?.url;
+    if (previousAvatar && previousAvatar !== nextAvatar) avatarUrlToUserId.delete(previousAvatar);
+    if (nextAvatar) {
+        avatarUrlToUserId.set(nextAvatar, profile.userId);
+        avatarUrlByUserId.set(profile.userId, nextAvatar);
+    } else {
+        avatarUrlByUserId.delete(profile.userId);
+    }
+
+    ensureGlobalStyles();
+    if (changed) flushProfiles();
+}
 
 /** Clase del contenedor del preview. El CSS del editor se acota aquí. */
 export const PREVIEW_CLASS = `${NS}-preview`;
@@ -118,24 +150,51 @@ export const PREVIEW_CLASS = `${NS}-preview`;
  * generador y afecta a ambos por igual.
  */
 export function applyPreview(profile: XcordProfile) {
-    injected.set(PREVIEW_KEY, buildProfileCss(profile, `.${PREVIEW_CLASS}`));
-    flush();
+    ensureGlobalStyles();
+    pendingPreview = profile;
+    if (previewFlushFrame) return;
+    previewFlushFrame = requestAnimationFrame(() => {
+        previewFlushFrame = 0;
+        if (!pendingPreview) return;
+        previewStyleEl = ensureStyleElement(previewStyleEl, "preview");
+        const css = buildProfileCss(pendingPreview, `.${PREVIEW_CLASS}`);
+        if (previewStyleEl.textContent !== css) previewStyleEl.textContent = css;
+        pendingPreview = null;
+    });
 }
 
 export function clearPreview() {
-    if (injected.delete(PREVIEW_KEY)) flush();
+    if (previewFlushFrame) cancelAnimationFrame(previewFlushFrame);
+    previewFlushFrame = 0;
+    pendingPreview = null;
+    previewStyleEl?.remove();
+    previewStyleEl = null;
 }
 
 export function clearProfile(userId: string) {
-    if (injected.delete(userId)) flush();
+    if (injected.delete(userId)) flushProfiles();
+    const avatarUrl = avatarUrlByUserId.get(userId);
+    if (avatarUrl) avatarUrlToUserId.delete(avatarUrl);
+    avatarUrlByUserId.delete(userId);
 }
 
 export function teardown() {
+    if (profilesFlushFrame) cancelAnimationFrame(profilesFlushFrame);
+    if (previewFlushFrame) cancelAnimationFrame(previewFlushFrame);
+    profilesFlushFrame = 0;
+    previewFlushFrame = 0;
+    pendingPreview = null;
     injected.clear();
-    styleEl?.remove();
-    styleEl = null;
+    globalStyleEl?.remove();
+    profilesStyleEl?.remove();
+    previewStyleEl?.remove();
+    globalStyleEl = null;
+    profilesStyleEl = null;
+    previewStyleEl = null;
     cache.clear();
+    inFlight.clear();
     avatarUrlToUserId.clear();
+    avatarUrlByUserId.clear();
 }
 
 function isValid(p: unknown): p is XcordProfile {
@@ -151,12 +210,34 @@ function isValid(p: unknown): p is XcordProfile {
 export function getCached(userId: string): XcordProfile | null | undefined {
     const entry = cache.get(userId);
     if (!entry) return undefined;
+    const now = Date.now();
     const ttl = entry.profile ? CACHE_TTL : NEGATIVE_TTL;
-    if (Date.now() - entry.fetchedAt > ttl) {
+    if (now - entry.fetchedAt > ttl) {
         cache.delete(userId);
         return undefined;
     }
+
+    entry.lastAccessed = now;
     return entry.profile;
+}
+
+function cacheProfile(userId: string, profile: XcordProfile | null) {
+    const now = Date.now();
+    cache.set(userId, { profile, fetchedAt: now, lastAccessed: now });
+
+    while (cache.size > MAX_CACHE_ENTRIES) {
+        let oldest: string | undefined;
+        let oldestAccess = Infinity;
+        for (const [id, entry] of cache) {
+            if (entry.lastAccessed < oldestAccess) {
+                oldest = id;
+                oldestAccess = entry.lastAccessed;
+            }
+        }
+        if (!oldest) break;
+        cache.delete(oldest);
+        if (injected.has(oldest)) clearProfile(oldest);
+    }
 }
 
 /**
@@ -178,12 +259,12 @@ export function fetchProfile(userId: string): Promise<XcordProfile | null> {
             const result = await Native.fetchRemoteProfile(userId);
             const body = result.ok ? result.profile?.profile ?? null : null;
             const profile = isValid(body) ? body : null;
-            cache.set(userId, { profile, fetchedAt: Date.now() });
+            cacheProfile(userId, profile);
             if (profile) applyProfile(profile);
             return profile;
         } catch {
             // Sin red: cacheamos el fallo brevemente para no martillear el servidor.
-            cache.set(userId, { profile: null, fetchedAt: Date.now() });
+            cacheProfile(userId, null);
             return null;
         } finally {
             inFlight.delete(userId);
