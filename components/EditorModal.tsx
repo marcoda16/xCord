@@ -9,7 +9,7 @@
  */
 
 import type { RenderModalProps } from "@vencord/discord-types";
-import { Modal } from "@webpack/common";
+import { Modal, useEffect, useRef } from "@webpack/common";
 
 import { ProfileEditor, useProfileDraft, type SyncActions } from "./Editor";
 import type { XcordProfile } from "../types";
@@ -21,6 +21,24 @@ export function EditorModal({ props, initial, onSave, sync }: {
     sync?: SyncActions;
 }) {
     const controller = useProfileDraft(initial, onSave);
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    // Discord envuelve el contenido del modal en un <main> con overflow:auto,
+    // pero el elemento que realmente desplaza es su padre. Ese overflow hace
+    // que position:sticky se ancle al contenedor equivocado y deje de seguir
+    // el scroll. Lo corregimos sólo durante la vida de este modal.
+    useEffect(() => {
+        const bodyInner = contentRef.current?.closest<HTMLElement>("main");
+        if (!bodyInner) return;
+
+        const previousOverflow = bodyInner.style.overflow;
+        bodyInner.style.overflow = "visible";
+
+        return () => {
+            if (previousOverflow) bodyInner.style.overflow = previousOverflow;
+            else bodyInner.style.removeProperty("overflow");
+        };
+    }, []);
 
     return (
         <Modal
@@ -47,7 +65,9 @@ export function EditorModal({ props, initial, onSave, sync }: {
                 }
             ]}
         >
-            <ProfileEditor controller={controller} showActions={false} sync={sync} />
+            <div ref={contentRef}>
+                <ProfileEditor controller={controller} showActions={false} sync={sync} />
+            </div>
         </Modal>
     );
 }

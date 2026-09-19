@@ -11,7 +11,7 @@
 import ErrorBoundary from "@components/ErrorBoundary";
 import { Flex } from "@components/Flex";
 import { Margins } from "@utils/margins";
-import { extractAndLoadChunksLazy, findComponentByCodeLazy } from "@webpack";
+import { extractAndLoadChunksLazy, findByCodeLazy, findComponentByCodeLazy } from "@webpack";
 import { FormSwitch } from "@components/FormSwitch";
 import { Button, Clickable, ColorPicker, Forms, RestAPI, Select, Slider, Text, TextInput, useEffect, useRef, useState } from "@webpack/common";
 import type { User } from "@vencord/discord-types";
@@ -304,7 +304,7 @@ const SHOP_CDN = "https://cdn.discordapp.com/media/v1/collectibles-shop";
  *   0 — anillo de avatar. `asset` directo, formato `a_<hex>` si es animado.
  *   1 — efecto de perfil. Necesita el puntero `profileEffect` además de
  *       aparecer en `collectibles`.
- *   2 — nameplate (fondo del nombre). No implementado.
+ *   2 — nameplate (fondo del nombre).
  *   3 — borde de tarjeta. En el perfil de un usuario con uno puesto, vivía
  *       solo como entrada en `collectibles`, sin puntero dedicado — es la
  *       hipótesis que estamos probando.
@@ -325,6 +325,7 @@ const COLLECTIBLE_BORDER = 3;
 const ASSET_HASH = /^[0-9a-f]{64}$/;
 
 export interface CatalogEntry {
+    kind?: "nameplate";
     id: string;
     title: string;
     /** En marcos: el recurso sobre el avatar. En placas: la ruta del asset. */
@@ -419,10 +420,8 @@ function scanCatalog(node: any, out: Catalog, depth = 0, title = "") {
         const title = item?.type === COLLECTIBLE_BORDER || item?.type === COLLECTIBLE_NAMEPLATE
             ? (label || item?.title || item?.label || String(skuId))
             : (item?.title || item?.label || label || String(skuId));
-        // Las decoraciones dan un asset directamente pintable como imagen; el
-        // de la placa es una ruta, no sabemos construir su URL de CDN
-        // todavía, así que no forzamos una miniatura para ella — pero sí hay
-        // que guardar la ruta, es lo que se aplica al elegirla.
+        // La decoración usa asset como imagen; la placa conserva su ruta para
+        // guardarla y usa el renderizador nativo con skuId para la miniatura.
         const asset = item?.type === COLLECTIBLE_DECORATION || item?.type === COLLECTIBLE_NAMEPLATE
             ? item?.asset
             : undefined;
@@ -457,7 +456,10 @@ function scanCatalog(node: any, out: Catalog, depth = 0, title = "") {
             : findThumbnail(item) ?? findThumbnail(node) ?? borderGuess;
 
         if (!bucket.some(e => e.id === String(skuId)))
-            bucket.push({ id: String(skuId), title, thumbnail, asset, palette, frame });
+            bucket.push({
+                id: String(skuId), title, thumbnail, asset, palette, frame,
+                kind: item?.type === COLLECTIBLE_NAMEPLATE ? "nameplate" : undefined
+            });
     }
 
     for (const value of Object.values(node)) scanCatalog(value, out, depth + 1, label);
@@ -765,12 +767,13 @@ function CatalogGrid({ entries, selected, onSelect }: {
     onSelect: (value: string) => void;
 }) {
     const valueOf = (entry: CatalogEntry) => entry.asset ?? entry.id;
+    const isNameplate = entries.some(entry => entry.kind === "nameplate");
 
     return (
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
+                gridTemplateColumns: isNameplate ? "repeat(auto-fill, minmax(160px, 1fr))" : "repeat(auto-fill, minmax(72px, 1fr))",
                 // El gap de 12px es el mismo que usa la cuadrícula nativa de
                 // "Explora la tienda" entre casillas de 80px. El espacio
                 // extra que necesita el desborde de cada marco ya no se
@@ -789,7 +792,8 @@ function CatalogGrid({ entries, selected, onSelect }: {
             <Clickable
                 onClick={() => onSelect("")}
                 style={{
-                    aspectRatio: "1",
+                    aspectRatio: isNameplate ? undefined : "1",
+                    minHeight: isNameplate ? "76px" : undefined,
                     display: "grid",
                     placeItems: "center",
                     borderRadius: "6px",
@@ -909,19 +913,33 @@ function CatalogTile({ entry, selected, onSelect }: {
 }) {
     const [failed, setFailed] = useState(false);
     const showImage = entry.thumbnail && !failed;
+    const [hovered, setHovered] = useState(false);
+    const isNameplate = entry.kind === "nameplate";
 
     return (
         <Clickable
             onClick={onSelect}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            onFocus={() => setHovered(true)}
+            onBlur={() => setHovered(false)}
+            aria-label={entry.title}
             style={{
-                aspectRatio: "1",
+                aspectRatio: isNameplate ? undefined : "1",
                 borderRadius: "6px",
                 overflow: "hidden",
                 border: `2px solid ${selected ? "var(--brand-500)" : "transparent"}`,
                 background: "var(--background-secondary)"
             }}
         >
-            {entry.frame ? (
+            {isNameplate ? (
+                <>
+                    <ErrorBoundary fallback={NameplateUnavailable}>
+                        <NameplatePreview entry={entry} hovered={hovered} selected={selected} />
+                    </ErrorBoundary>
+                    <div style={{ padding: "6px", fontSize: "11px", textAlign: "center", color: "var(--text-normal)" }}>{entry.title}</div>
+                </>
+            ) : entry.frame ? (
                 <BorderFramePreview entry={entry} />
             ) : showImage ? (
                 <img
@@ -944,6 +962,42 @@ function CatalogTile({ entry, selected, onSelect }: {
                 }} title={entry.title}>{entry.title}</div>
             )}
         </Clickable>
+    );
+}
+
+interface NativeNameplateData {
+    skuId: string;
+    src?: string;
+    imgAlt?: string;
+    palette: { name: string; darkBackground: string; lightBackground: string; };
+}
+
+// Firmas verificadas en el cliente: el componente resuelve static/video por
+// skuId y aplica la paleta del tema. No usa asset como URL de una imagen.
+const normalizeNameplate = findByCodeLazy("imgAlt:", "palette:") as (item: {
+    skuId: string; asset?: string; label: string; palette?: string;
+}) => NativeNameplateData;
+const NativeNameplate = findComponentByCodeLazy<{
+    nameplate: NativeNameplateData;
+    hovered: boolean;
+    selected: boolean;
+    placement: "mini_preview";
+}>(".MINI_PREVIEW,[");
+
+function NameplateUnavailable() {
+    return <div style={{ padding: "8px", fontSize: "11px" }}>Vista previa no disponible</div>;
+}
+
+function NameplatePreview({ entry, hovered, selected }: {
+    entry: CatalogEntry; hovered: boolean; selected: boolean;
+}) {
+    const nameplate = normalizeNameplate({
+        skuId: entry.id, asset: entry.asset, label: entry.title, palette: entry.palette
+    });
+    return (
+        <div style={{ position: "relative", height: "48px", overflow: "hidden", pointerEvents: "none" }}>
+            <NativeNameplate nameplate={nameplate} hovered={hovered} selected={selected} placement="mini_preview" />
+        </div>
     );
 }
 
