@@ -815,33 +815,25 @@ function CatalogGrid({ entries, selected, onSelect }: {
     );
 }
 
-/**
- * Miniatura compuesta de un borde de perfil: el avatar de muestra en el
- * centro con las capas del marco (frente/fondo, arriba/abajo) superpuestas.
- *
- * El contenedor reserva el desborde del marco como `padding` en sus cuatro
- * lados —así el avatar de muestra ocupa exactamente el área "segura"— y
- * cada capa se ancla contra el borde exterior de ese contenedor, ocupando
- * la franja que el padding dejó libre.
- *
- * Discord ancla sus capas con un `top`/`bottom` NEGATIVO en vez de contra
- * el borde exterior, porque en la tarjeta de perfil real el contenedor de
- * las capas es el área interior, no la que incluye el desborde. Acá el
- * contenedor ya abarca el desborde entero, así que anclar en 0 deja la
- * capa justo donde va; un valor negativo la empujaría fuera de la casilla,
- * que es lo que hacía que los marcos más grandes se desbordaran sobre sus
- * vecinos (cuánto se salían dependía del alto intrínseco de cada imagen,
- * así que ningún margen fijo alcanzaba para todos).
- *
- * Las medidas van en unidades de container query (`cqw`) y no en
- * porcentaje simple: el padding vertical en porcentaje se calcula contra
- * el ANCHO del contenedor, pero mezclarlo con otras propiedades que usan
- * el alto es frágil; `cqw` fuerza que todo escale contra el ancho, que es
- * la base que espera la matemática de Discord (`innerWidth`).
- */
+/** Miniatura de borde sobre la misma silueta de tarjeta que usa la tienda. */
 function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const frame = entry.frame!;
-    const cqw = (v: number) => `${(v / frame.innerWidth) * 100}cqw`;
+    const horizontalOverflow = frame.overflowHorizontal / frame.innerWidth;
+    const topOverflow = frame.overflowTop / frame.innerWidth;
+    const bottomOverflow = frame.overflowBottom / frame.innerWidth;
+
+    // El rectángulo interior tiene la proporción de la tarjeta miniatura de
+    // Discord. Reducimos su ancho para que el arte que sobresale siga cabiendo
+    // incluso en los marcos con flores o llamas especialmente grandes.
+    const cardAspect = 1.18;
+    const cardWidth = Math.min(
+        64,
+        84 / (1 + horizontalOverflow * 2),
+        84 / (cardAspect + topOverflow + bottomOverflow)
+    );
+    const cardHeight = cardWidth * cardAspect;
+    const cardTop = (100 - cardHeight - cardWidth * (topOverflow + bottomOverflow)) / 2
+        + cardWidth * topOverflow;
 
     const renderLayer = (layer: CardBorderLayer) => (
         <img
@@ -851,45 +843,72 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
             loading="lazy"
             style={{
                 position: "absolute",
-                left: 0,
-                right: 0,
-                width: "100%",
-                [layer.anchor === "top" ? "top" : "bottom"]: 0,
-                zIndex: layer.order === "front" ? 2 : 0,
+                left: `${-horizontalOverflow * 100}%`,
+                width: `${(1 + horizontalOverflow * 2) * 100}%`,
+                [layer.anchor === "top" ? "top" : "bottom"]:
+                    `${-(layer.anchor === "top" ? topOverflow : bottomOverflow) * 100}cqw`,
+                zIndex: layer.order === "front" ? 3 : 0,
                 pointerEvents: "none"
             }}
         />
     );
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", containerType: "inline-size" } as any}>
+        <div
+            title={entry.title}
+            aria-hidden="true"
+            style={{
+                position: "relative",
+                width: "100%",
+                height: "100%",
+                overflow: "hidden",
+                background: "var(--background-tertiary)"
+            }}
+        >
             <div
                 style={{
-                    position: "relative",
-                    width: "100%",
-                    height: "100%",
-                    boxSizing: "border-box",
-                    paddingTop: cqw(frame.overflowTop),
-                    paddingBottom: cqw(frame.overflowBottom),
-                    paddingInline: cqw(frame.overflowHorizontal)
-                }}
+                    position: "absolute",
+                    left: `${(100 - cardWidth) / 2}%`,
+                    top: `${cardTop}%`,
+                    width: `${cardWidth}%`,
+                    height: `${cardHeight}%`,
+                    containerType: "inline-size"
+                } as any}
             >
                 <div
                     style={{
-                        position: "relative",
+                        position: "absolute",
+                        inset: 0,
                         zIndex: 1,
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: "4px",
-                        background: "var(--background-tertiary)",
-                        display: "grid",
-                        placeItems: "center"
+                        overflow: "hidden",
+                        borderRadius: "5px",
+                        background: "var(--background-secondary)",
+                        boxShadow: "0 1px 3px rgb(0 0 0 / 35%)"
                     }}
                 >
-                    <svg viewBox="0 0 24 24" width="55%" height="55%" fill="var(--background-secondary-alt)">
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4v-1z" />
-                    </svg>
+                    <div style={{ height: "28%", background: "var(--background-modifier-accent)" }} />
+                    <div style={{ position: "relative", height: "72%", padding: "18% 12% 8%" }}>
+                        <div style={{
+                            position: "absolute",
+                            top: "-18%",
+                            left: "12%",
+                            width: "27%",
+                            aspectRatio: "1",
+                            borderRadius: "50%",
+                            border: "2px solid var(--background-secondary)",
+                            background: "var(--background-tertiary)",
+                            display: "grid",
+                            placeItems: "center"
+                        }}>
+                            <svg viewBox="0 0 24 24" width="62%" height="62%" fill="var(--interactive-muted)">
+                                <circle cx="12" cy="8" r="4" />
+                                <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7H5z" />
+                            </svg>
+                        </div>
+                        <div style={{ width: "48%", height: "7%", borderRadius: "999px", background: "var(--text-muted)" }} />
+                        <div style={{ width: "76%", height: "5%", marginTop: "12%", borderRadius: "999px", background: "var(--background-modifier-accent)" }} />
+                        <div style={{ width: "62%", height: "5%", marginTop: "7%", borderRadius: "999px", background: "var(--background-modifier-accent)" }} />
+                    </div>
                 </div>
                 {frame.layers.map(renderLayer)}
             </div>
