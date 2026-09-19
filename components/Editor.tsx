@@ -835,23 +835,41 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
     const cardTop = (100 - cardHeight - cardWidth * (topOverflow + bottomOverflow)) / 2
         + cardWidth * topOverflow;
 
-    const renderLayer = (layer: CardBorderLayer) => (
-        <img
-            key={layer.id}
-            src={`${SHOP_CDN}/${entry.id}/${layer.id}/static`}
-            alt=""
-            loading="lazy"
-            style={{
+    const renderLayers = (order: CardBorderLayer["order"]) => {
+        const layers = frame.layers.filter(layer => layer.order === order);
+        if (!layers.length) return null;
+
+        return (
+            <div style={{
                 position: "absolute",
                 left: `${-horizontalOverflow * 100}%`,
-                width: `${(1 + horizontalOverflow * 2) * 100}%`,
-                [layer.anchor === "top" ? "top" : "bottom"]:
-                    `${-(layer.anchor === "top" ? topOverflow : bottomOverflow) * 100}cqw`,
-                zIndex: layer.order === "front" ? 3 : 0,
+                right: `${-horizontalOverflow * 100}%`,
+                top: `${-topOverflow * 100}cqw`,
+                bottom: `${-bottomOverflow * 100}cqw`,
+                zIndex: order === "front" ? 3 : 0,
+                overflow: "hidden",
                 pointerEvents: "none"
-            }}
-        />
-    );
+            }}>
+                {layers.map(layer => (
+                    <img
+                        key={layer.id}
+                        src={`${SHOP_CDN}/${entry.id}/${layer.id}/static`}
+                        alt=""
+                        loading="lazy"
+                        style={{
+                            position: "absolute",
+                            left: 0,
+                            width: "100%",
+                            height: "auto",
+                            maxWidth: "none",
+                            display: "block",
+                            [layer.anchor === "top" ? "top" : "bottom"]: 0
+                        }}
+                    />
+                ))}
+            </div>
+        );
+    };
 
     return (
         <div
@@ -875,6 +893,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
                     containerType: "inline-size"
                 } as any}
             >
+                {renderLayers("back")}
                 <div
                     style={{
                         position: "absolute",
@@ -910,7 +929,7 @@ function BorderFramePreview({ entry }: { entry: CatalogEntry; }) {
                         <div style={{ width: "62%", height: "5%", marginTop: "7%", borderRadius: "999px", background: "var(--background-modifier-accent)" }} />
                     </div>
                 </div>
-                {frame.layers.map(renderLayer)}
+                {renderLayers("front")}
             </div>
         </div>
     );
