@@ -29,6 +29,8 @@
     .trust{display:grid;grid-template-columns:auto 1fr;gap:11px;margin-top:24px;padding-top:21px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;line-height:1.5}
     .trust svg{width:19px;height:19px;margin-top:1px;stroke:var(--ok);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
     .trust strong{display:block;margin-bottom:2px;color:var(--text);font-size:13px}
+    .hint{margin:24px 0 0;padding:12px 16px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}
+    .hint kbd{padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:rgba(255,255,255,.05);color:var(--text);font-family:inherit;font-size:12px}
     .reference{text-align:center;margin:17px 0 0;color:#858b9e;font-size:11px}
     code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
     .footer{margin:15px 0 0;text-align:center;color:#7f8495;font-size:11.5px;line-height:1.5}
@@ -49,7 +51,7 @@
       <h1 id="result-title">El enlace ya no es válido</h1>
       <p class="message">Por seguridad, los enlaces caducan y solo pueden utilizarse una vez. Inicia uno nuevo desde xcord.</p>
       
-      <button class="action" type="button" onclick="window.close()">Cerrar y volver a Discord</button>
+      <button class="action" id="close-btn" type="button">Cerrar y volver a Discord</button>
       <div class="trust">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
         <div><strong>Tu contraseña nunca se comparte con xcord</strong>La autorización ocurre directamente en Discord. xcord solo recibe la identidad necesaria para verificar que esta cuenta te pertenece.</div>
@@ -58,6 +60,23 @@
     </section>
     <p class="footer">Puedes cerrar esta pestaña con seguridad. El plugin terminará la vinculación automáticamente.</p>
   </main>
-  <script>(function(){var r=new URLSearchParams(location.search).get("ref");if(r&&/^[0-9a-f]{8}$/.test(r)){document.getElementById("ref-code").textContent=r;document.getElementById("ref-line").hidden=false}})();</script>
+  <script>(function(){
+  var b=document.getElementById("close-btn");
+  var mac=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent);
+  b.addEventListener("click",function(){
+    try{window.close()}catch(e){}
+    setTimeout(function(){
+      if(document.hidden)return;
+      // El aviso se arma con nodos y textContent, igual que el hueco de la
+      // referencia. Esta página no asigna HTML como cadena en ningún punto.
+      var p=document.createElement("p");
+      p.className="hint";
+      var kbd=function(t){var k=document.createElement("kbd");k.textContent=t;return k};
+      p.append("Tu navegador no permite que esta pestaña se cierre sola. Ciérrala con ",
+        kbd(mac?"⌘":"Ctrl")," + ",kbd("W"),".");
+      b.replaceWith(p);
+    },300);
+  });
+})();</script><script>(function(){var r=new URLSearchParams(location.search).get("ref");if(r&&/^[0-9a-f]{8}$/.test(r)){document.getElementById("ref-code").textContent=r;document.getElementById("ref-line").hidden=false}})();</script>
 </body>
 </html>
