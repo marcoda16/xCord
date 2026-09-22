@@ -37,9 +37,13 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
                     text: "Actualizar ahora",
                     variant: "primary",
                     onClick: async () => {
-                        const result = await onOpen();
-                        if (result.ok) props.onClose();
-                        else alert(result.error || "No se pudo iniciar la actualización.");
+                        try {
+                            const result = await onOpen();
+                            if (result.ok) props.onClose();
+                            else alert(result.error || "No se pudo iniciar la actualización.");
+                        } catch {
+                            alert("No se pudo iniciar la actualización. Cierra Discord por completo, también desde la bandeja de Windows, y vuelve a abrirlo antes de intentarlo otra vez.");
+                        }
                     }
                 },
                 {
