@@ -461,7 +461,7 @@ async function runUpdateCheck(manual = false): Promise<void> {
             manifest={manifest}
             current={XCORD_VERSION}
             onDismiss={() => { settings.store.dismissedUpdateVersion = manifest.latest; }}
-            onOpen={() => void Native.openUpdatePage(manifest.downloadUrl)}
+            onOpen={() => Native.runXcordInstaller()}
         />
     ));
 }

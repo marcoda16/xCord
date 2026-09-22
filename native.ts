@@ -13,6 +13,8 @@
 import { CspPolicies, ImageSrc } from "@main/csp";
 import { shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { existsSync } from "fs";
+import { join } from "path";
 
 const CATBOX_API = "https://catbox.moe/user/api.php";
 
@@ -351,6 +353,26 @@ export async function openUpdatePage(
         return { ok: true };
     } catch {
         return { ok: false };
+    }
+}
+
+/** Ejecuta solo el instalador incluido en este clon de xcord, nunca una ruta remota. */
+export async function runXcordInstaller(
+    _event: IpcMainInvokeEvent
+): Promise<{ ok: boolean; error?: string; }> {
+    if (process.platform !== "win32")
+        return { ok: false, error: "La actualización automática con xcord.bat solo está disponible en Windows." };
+
+    // native.ts se compila dentro de dist/; el repositorio está un nivel arriba.
+    const installer = join(__dirname, "..", "src", "userplugins", "xcord", "xcord.bat");
+    if (!existsSync(installer))
+        return { ok: false, error: "No se encontró xcord.bat en el repositorio local. Descárgalo desde GitHub y ejecútalo manualmente." };
+
+    try {
+        const error = await shell.openPath(installer);
+        return error ? { ok: false, error: `No se pudo abrir xcord.bat: ${error}` } : { ok: true };
+    } catch {
+        return { ok: false, error: "No se pudo abrir xcord.bat. Ejecútalo manualmente desde la carpeta de xcord." };
     }
 }
 

@@ -7,9 +7,8 @@
 /**
  * Aviso de que hay una versión nueva.
  *
- * No descarga ni ejecuta nada: enseña qué cambia, abre la página de descarga
- * si el usuario quiere, y explica que basta con volver a pasar `xcord.bat`,
- * que ya hace `git pull`, recompila e inyecta.
+ * Enseña qué cambia y, cuando el usuario lo pide, abre el instalador local
+ * `xcord.bat`, que ya hace `git pull`, recompila e inyecta.
  *
  * El texto viene de un archivo remoto. Se pinta como texto —React escapa, aquí
  * no se construye HTML— y llega ya validado y recortado por `parseManifest`.
@@ -26,7 +25,7 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
     current: string;
     /** Marca esta versión como vista, para no repetir el aviso. */
     onDismiss: () => void;
-    onOpen: () => void;
+    onOpen: () => Promise<{ ok: boolean; error?: string; }>;
 }) {
     return (
         <Modal
@@ -35,11 +34,12 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
             title={manifest.title}
             actions={[
                 {
-                    text: "Ver actualización",
+                    text: "Actualizar ahora",
                     variant: "primary",
-                    onClick: () => {
-                        onOpen();
-                        props.onClose();
+                    onClick: async () => {
+                        const result = await onOpen();
+                        if (result.ok) props.onClose();
+                        else alert(result.error || "No se pudo iniciar la actualización.");
                     }
                 },
                 {
@@ -106,7 +106,7 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
             <div style={{ margin: "16px 0 12px", borderTop: "1px solid var(--background-modifier-accent)" }} />
 
             <Text variant="text-xs/normal" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                Ejecuta <code>xcord.bat</code> de nuevo y reinicia Discord por completo para instalarla.
+                Se abrirá <code>xcord.bat</code> en una ventana. Sigue sus instrucciones y, al terminar, reinicia Discord por completo.
             </Text>
         </Modal>
     );
