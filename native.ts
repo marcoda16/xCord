@@ -300,6 +300,60 @@ export async function syncProfileImages(
     }
 }
 
+/**
+ * Consulta el manifiesto de versiones y lo devuelve sin interpretar.
+ *
+ * Vive aquí por la misma razón que el resto de llamadas externas, y además
+ * porque el fallo tiene que ser silencioso: si no hay conexión, devuelve null
+ * y el plugin no enseña nada. Un aviso de actualización que se convierte en
+ * un error en pantalla es peor que no avisar.
+ */
+export async function fetchUpdateManifest(
+    _event: IpcMainInvokeEvent,
+    url: string
+): Promise<unknown | null> {
+    try {
+        const target = new URL(url);
+        if (target.protocol !== "https:") return null;
+
+        // Sin caduca la petición, un servidor que no responde dejaría el
+        // temporizador colgado hasta que el usuario cierre Discord.
+        const res = await fetch(target.href, {
+            headers: { accept: "application/json" },
+            signal: AbortSignal.timeout(10_000),
+            cache: "no-store"
+        });
+
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Abre la página de descarga en el navegador del sistema.
+ *
+ * La URL sale de un archivo remoto, así que se vuelve a validar aquí aunque
+ * el renderer ya lo haya hecho: esto abre una ventana fuera de Discord, y no
+ * debe poder llevar a cualquier sitio porque alguien edite el manifiesto.
+ */
+export async function openUpdatePage(
+    _event: IpcMainInvokeEvent,
+    url: string
+): Promise<{ ok: boolean; }> {
+    try {
+        const target = new URL(url);
+        const allowed = ["github.com", "www.github.com", "marcoda16.github.io"];
+        if (target.protocol !== "https:" || !allowed.includes(target.host)) return { ok: false };
+
+        await shell.openExternal(target.href);
+        return { ok: true };
+    } catch {
+        return { ok: false };
+    }
+}
+
 /** Abre el login de Discord en el navegador del sistema y devuelve el `state` para sondear. */
 export async function startDiscordLogin(
     _event: IpcMainInvokeEvent

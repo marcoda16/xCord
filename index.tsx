@@ -23,7 +23,7 @@ import { Devs } from "@utils/constants";
 import definePlugin, { OptionType, type PluginNative } from "@utils/types";
 import type { UserProfile } from "@vencord/discord-types";
 import { findStoreLazy } from "@webpack";
-import { UserStore } from "@webpack/common";
+import { Button, UserStore } from "@webpack/common";
 import virtualMerge from "virtual-merge";
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
@@ -33,8 +33,17 @@ import type { User } from "@vencord/discord-types";
 
 import Editor from "./components/Editor";
 import { EditorModal } from "./components/EditorModal";
+import { UpdateModal } from "./components/UpdateModal";
 import { fillToThemeColors, NS } from "./lib/css";
 import { collectLocalImages, imageTag, withUploadedImages } from "./lib/profileImages";
+import {
+    CHECK_DELAY_MS,
+    MANIFEST_URL,
+    parseManifest,
+    shouldCheck,
+    shouldNotify,
+    XCORD_VERSION
+} from "./lib/updates";
 import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
 import { refreshProfileDom, setBorderResolver, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
@@ -104,6 +113,30 @@ const settings = definePluginSettings({
         description: "Imágenes del perfil ya subidas.",
         default: "{}",
         hidden: true
+    },
+    /** Última versión cuyo aviso se cerró con "Ahora no". */
+    dismissedUpdateVersion: {
+        type: OptionType.STRING,
+        description: "Versión cuyo aviso de actualización ya se descartó.",
+        default: "",
+        hidden: true
+    },
+    /** Marca de la última consulta, para no molestar al servidor cada arranque. */
+    lastUpdateCheck: {
+        type: OptionType.STRING,
+        description: "Cuándo se consultaron actualizaciones por última vez.",
+        default: "0",
+        hidden: true
+    },
+    checkForUpdates: {
+        type: OptionType.COMPONENT,
+        description: "Buscar actualizaciones",
+        component: () => (
+            <Button
+                size={Button.Sizes.SMALL}
+                onClick={() => void runUpdateCheck(true)}
+            >Buscar actualizaciones</Button>
+        )
     }
 });
 
@@ -117,6 +150,9 @@ function readSyncedImages(): Record<string, SyncedImage> {
         return {};
     }
 }
+
+/** Temporizador del aviso de actualizaciones, para poder cancelarlo al parar. */
+let updateCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Perfil propio, cacheado en memoria para no deserializar en cada render. */
 let ownProfile: XcordProfile | null = null;
@@ -386,6 +422,49 @@ const UserContextPatch: NavContextMenuPatchCallback = (children, { user }: { use
         />
     );
 };
+
+/**
+ * Consulta si hay versión nueva y, si la hay, enseña el aviso.
+ *
+ * `manual` se salta el intervalo de 24 h —lo pide el usuario desde ajustes—
+ * y avisa aunque ya se hubiera descartado esa versión; si no hay novedad, lo
+ * dice, que es lo que se espera al pulsar un botón.
+ *
+ * La comprobación automática, en cambio, **nunca** enseña un error: sin
+ * conexión simplemente no pasa nada.
+ */
+async function runUpdateCheck(manual = false): Promise<void> {
+    const now = Date.now();
+    if (!manual && !shouldCheck(settings.store.lastUpdateCheck, now)) return;
+
+    const raw = await Native.fetchUpdateManifest(MANIFEST_URL);
+
+    // La marca se guarda aunque falle: si el servidor está caído, no tiene
+    // sentido reintentar en cada arranque.
+    settings.store.lastUpdateCheck = String(now);
+
+    const manifest = parseManifest(raw);
+    if (!manifest) {
+        if (manual) alert("No se pudo comprobar si hay actualizaciones. Inténtalo más tarde.");
+        return;
+    }
+
+    const dismissed = manual ? null : settings.store.dismissedUpdateVersion;
+    if (!shouldNotify(manifest, XCORD_VERSION, dismissed)) {
+        if (manual) alert(`xcord está al día (versión ${XCORD_VERSION}).`);
+        return;
+    }
+
+    openModal(props => (
+        <UpdateModal
+            props={props}
+            manifest={manifest}
+            current={XCORD_VERSION}
+            onDismiss={() => { settings.store.dismissedUpdateVersion = manifest.latest; }}
+            onOpen={() => void Native.openUpdatePage(manifest.downloadUrl)}
+        />
+    ));
+}
 
 export default definePlugin({
     name: "xcord",
@@ -800,6 +879,11 @@ export default definePlugin({
 
         setWidgetResolver(userId => resolveProfile(userId)?.widgets);
 
+        // Unos segundos de margen: al arrancar, el cliente tiene cosas más
+        // urgentes que hacer que pedir un JSON, y un modal encima de la
+        // pantalla de carga se vería fatal.
+        updateCheckTimer = setTimeout(() => void runUpdateCheck(), CHECK_DELAY_MS);
+
         startObserver(userId => {
             if (!settings.store.syncEnabled) return;
             if (userId === own.userId) return;
@@ -808,6 +892,10 @@ export default definePlugin({
     },
 
     stop() {
+        if (updateCheckTimer !== null) {
+            clearTimeout(updateCheckTimer);
+            updateCheckTimer = null;
+        }
         stopObserver();
         setBorderResolver(null);
         setWidgetResolver(null);
