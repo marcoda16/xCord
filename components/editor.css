@@ -461,22 +461,23 @@ html[data-xcord-reduce-motion] .xcord-editor-chevron {
 }
 
 .xcord-profile-entry {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 32px;
-    width: 32px;
-    height: 32px;
-    padding: 0;
     cursor: pointer;
 }
 
 .xcord-profile-entry svg {
-    width: 18px;
-    height: 18px;
+    display: block;
+    width: 20px;
+    height: 20px;
 }
 
 .xcord-profile-entry--fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
     border: 1px solid var(--input-border, var(--background-modifier-accent));
     border-radius: 8px;
     background: var(--button-secondary-background, var(--background-secondary));

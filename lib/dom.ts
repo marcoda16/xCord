@@ -302,6 +302,7 @@ function renderProfileEditButton(root: Element, userId: string) {
     button.type = "button";
     button.className = [reference?.className, PROFILE_EDIT_BUTTON_CLASS,
         reference?.className ? "" : `${PROFILE_EDIT_BUTTON_CLASS}--fallback`].filter(Boolean).join(" ");
+    if (reference) button.style.cssText = reference.style.cssText;
     button.title = "Editar perfil en xcord";
     button.setAttribute("aria-label", "Editar perfil en xcord");
 
