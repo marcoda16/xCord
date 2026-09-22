@@ -1,10 +1,10 @@
 # Páginas publicadas (GitHub Pages)
 
 `oauth/*.html` son **archivos generados**. No los edites a mano: se producen desde
-`supabase/functions/_shared/oauth-page.ts` del repo de infraestructura de xcord, con
+`supabase/functions/_shared/oauth-page.ts`, en este mismo repo, con
 
 ```bash
-node oauth-page.build.mjs <ruta-a-este-repo>/docs/oauth
+node supabase/functions/_shared/oauth-page.build.mjs docs/oauth
 ```
 
 Son la pantalla final del login de Discord. La Edge Function `discord-oauth-callback`
