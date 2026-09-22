@@ -1,3 +1,9 @@
+/*
+ * Vencord, a Discord client mod
+ * Copyright (c) 2026 marcoda16
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 /**
  * Aviso de que hay una versión nueva.
  *
@@ -10,7 +16,7 @@
  */
 
 import type { RenderModalProps } from "@vencord/discord-types";
-import { Forms, Modal, Text } from "@webpack/common";
+import { Modal, Text } from "@webpack/common";
 
 import type { UpdateManifest } from "../lib/updates";
 
@@ -25,7 +31,7 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
     return (
         <Modal
             {...props}
-            size="small"
+            size="sm"
             title={manifest.title}
             actions={[
                 {
@@ -46,40 +52,61 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
                 }
             ]}
         >
-            <Text variant="text-md/semibold">
-                Nueva versión de xcord disponible: {manifest.latest}
-            </Text>
-
-            <Text variant="text-sm/normal" style={{ marginTop: 4, color: "var(--text-muted)" }}>
-                Tienes la {current}.
-            </Text>
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: "var(--background-secondary)",
+                minWidth: 0
+            }}>
+                <div style={{
+                    display: "grid",
+                    placeItems: "center",
+                    width: 38,
+                    height: 38,
+                    flexShrink: 0,
+                    borderRadius: 10,
+                    color: "white",
+                    fontWeight: 800,
+                    background: "var(--brand-500, #5865f2)"
+                }}>x</div>
+                <div style={{ minWidth: 0 }}>
+                    <Text variant="text-md/semibold" style={{ overflowWrap: "anywhere" }}>
+                        xcord {manifest.latest} ya está disponible
+                    </Text>
+                    <Text variant="text-xs/normal" style={{ marginTop: 2, color: "var(--text-muted)" }}>
+                        Versión instalada: {current}
+                    </Text>
+                </div>
+            </div>
 
             {manifest.message && (
-                <Text variant="text-sm/normal" style={{ marginTop: 12 }}>
+                <Text variant="text-sm/normal" style={{ marginTop: 14, overflowWrap: "anywhere" }}>
                     {manifest.message}
                 </Text>
             )}
 
             {manifest.notes.length > 0 && (
-                <ul style={{ margin: "12px 0 0", paddingLeft: 20 }}>
-                    {manifest.notes.map((note, i) => (
-                        <li key={i}>
-                            <Text variant="text-sm/normal" tag="span">{note}</Text>
-                        </li>
-                    ))}
-                </ul>
+                <div style={{ marginTop: 14 }}>
+                    <Text variant="text-xs/semibold" style={{ color: "var(--text-muted)" }}>
+                        NOVEDADES
+                    </Text>
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 20, overflowWrap: "anywhere" }}>
+                        {manifest.notes.map((note, i) => (
+                            <li key={i} style={{ marginTop: i ? 6 : 0 }}>
+                                <Text variant="text-sm/normal" tag="span">{note}</Text>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             )}
 
-            <Forms.FormDivider style={{ margin: "16px 0 12px" }} />
+            <div style={{ margin: "16px 0 12px", borderTop: "1px solid var(--background-modifier-accent)" }} />
 
             <Text variant="text-xs/normal" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                Para actualizar basta con volver a ejecutar <code>xcord.bat</code>: ya se encarga
-                de traer los cambios, recompilar Vencord e inyectarlo. Después cierra Discord del
-                todo y vuelve a abrirlo — no basta con recargar.
-            </Text>
-
-            <Text variant="text-xs/normal" style={{ color: "var(--text-muted)", marginTop: 8 }}>
-                xcord no descarga ni instala nada por su cuenta.
+                Ejecuta <code>xcord.bat</code> de nuevo y reinicia Discord por completo para instalarla.
             </Text>
         </Modal>
     );
