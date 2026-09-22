@@ -58,6 +58,17 @@ Function; nunca en este repositorio.
 Client ID de la app de Discord (público): `1540619781378539601`. Redirect URI registrada:
 `https://reiszfgtqtyumfaatajl.supabase.co/functions/v1/discord-oauth-callback`.
 
+La pantalla final del callback se genera con un renderer aislado y sin recursos externos en
+`supabase/functions/_shared/oauth-page.ts`, y se publica como sitio estático en GitHub Pages
+(`docs/oauth/`). La Edge Function no devuelve HTML: redirige ahí con el desenlace y, en los
+errores, una referencia opaca — el gateway de `*.supabase.co` reescribe el `text/html` de los
+proyectos sin dominio propio a `text/plain`, y el navegador enseñaba el código fuente. Detalles,
+pruebas y vista previa local en `supabase/functions/discord-oauth-callback/README.md`.
+
+Las imágenes elegidas del disco no viajan dentro del perfil: al publicar se suben a Supabase
+Storage y la copia remota lleva solo su URL. A Postgres no llega base64 nunca. Ver
+`supabase/functions/xcord-images/README.md`.
+
 ## Instalación (para probar el plugin)
 
 **La forma fácil (Windows):** descarga [`xcord.bat`](xcord.bat) y hazle doble clic. Si faltan
