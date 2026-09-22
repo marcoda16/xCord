@@ -302,18 +302,28 @@ function renderProfileEditButton(root: Element, userId: string) {
     button.type = "button";
     button.className = [reference?.className, PROFILE_EDIT_BUTTON_CLASS,
         reference?.className ? "" : `${PROFILE_EDIT_BUTTON_CLASS}--fallback`].filter(Boolean).join(" ");
-    if (reference) button.style.cssText = reference.style.cssText;
     button.title = "Editar perfil en xcord";
     button.setAttribute("aria-label", "Editar perfil en xcord");
 
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    // Las clases del botón no bastan: Discord da el tamaño 32×32 mediante
+    // buttonChildrenWrapper/buttonChildren. Clonamos solo ese contenido,
+    // sin los atributos ni manejadores del botón "Más".
+    const content = reference?.firstElementChild?.cloneNode(true) as Element | undefined;
+    const nativeIcon = content?.querySelector<SVGSVGElement>("svg");
+    const svg = nativeIcon ?? document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
+    svg.replaceChildren();
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("fill", "currentColor");
     path.setAttribute("d", "m13.96 5.46 4.58 4.58a1 1 0 0 0 1.42 0l1.38-1.38a2 2 0 0 0 0-2.82l-3.18-3.18a2 2 0 0 0-2.82 0l-1.38 1.38a1 1 0 0 0 0 1.42ZM2.11 20.16l.73-4.22a3 3 0 0 1 .83-1.61l7.87-7.87a1 1 0 0 1 1.42 0l4.58 4.58a1 1 0 0 1 0 1.42l-7.87 7.87a3 3 0 0 1-1.6.83l-4.23.73a1.5 1.5 0 0 1-1.73-1.73Z");
     svg.appendChild(path);
-    button.appendChild(svg);
+    if (nativeIcon && content) button.appendChild(content);
+    else {
+        svg.setAttribute("width", "16");
+        svg.setAttribute("height", "16");
+        button.appendChild(svg);
+    }
     button.addEventListener("click", onEdit);
     row.appendChild(button);
 }
