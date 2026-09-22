@@ -1495,7 +1495,6 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 id="appearance"
                 title="Apariencia"
                 description="Colores, fondo dinámico y estilo del nombre."
-                defaultOpen
             >
             <Forms.FormTitle tag="h3">Fondo del perfil</Forms.FormTitle>
             <FormSwitch
