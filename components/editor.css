@@ -2,9 +2,10 @@
     --xcord-editor-accent: var(--brand-500, #5865f2);
     --xcord-editor-accent-2: #8b5cf6;
     display: grid;
-    grid-template-columns: minmax(360px, 1fr) minmax(390px, .92fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
     gap: 20px;
     align-items: stretch;
+    min-width: 0;
 }
 
 .xcord-editor-main,
@@ -431,10 +432,6 @@
 @media (max-width: 960px) {
     .xcord-editor {
         grid-template-columns: 1fr;
-    }
-
-    .xcord-editor-preview-column {
-        order: -1;
     }
 
     .xcord-editor-preview {
