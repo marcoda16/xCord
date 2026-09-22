@@ -113,6 +113,35 @@ export interface DynamicBackground {
     scale: number;
 }
 
+/** Tarjeta destacada que ocupa todo el ancho del panel de widgets. */
+export interface ProfileWidgetHero {
+    /** Opcional: una imagen por sí sola también constituye una tarjeta válida. */
+    title?: string;
+    /** Si se omite, la tarjeta se muestra sin comportamiento de enlace. */
+    url?: string;
+    /** Imagen horizontal mediante URL HTTPS. Admite formatos animados como GIF. */
+    imageUrl?: string;
+    description?: string;
+}
+
+/** Tarjeta compacta con título, descripción e icono opcional. */
+export interface ProfileWidgetLink {
+    /** Identificador local estable para editar, ordenar y renderizar la lista. */
+    id: string;
+    title: string;
+    description?: string;
+    /** Compatibilidad con tarjetas guardadas por versiones anteriores. */
+    url?: string;
+    /** Imagen cuadrada. En la primera versión solo se aceptan URLs HTTPS. */
+    imageUrl?: string;
+}
+
+export interface ProfileWidgets {
+    hero?: ProfileWidgetHero;
+    /** El editor y el renderer limitan la lista a cuatro elementos. */
+    links: ProfileWidgetLink[];
+}
+
 /** Una pieza del borde, tal como la describe Discord. */
 export interface CardBorderLayer {
     id: string;
@@ -189,6 +218,9 @@ export interface XcordProfile {
     banner?: BannerStyle;
     avatar?: AvatarStyle;
     fonts?: FontDefinition[];
+
+    /** Panel adicional del perfil completo, visible solo para usuarios de xcord. */
+    widgets?: ProfileWidgets;
 }
 
 export function emptyProfile(userId: string): XcordProfile {

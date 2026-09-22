@@ -1,0 +1,464 @@
+.xcord-editor {
+    --xcord-editor-accent: var(--brand-500, #5865f2);
+    --xcord-editor-accent-2: #8b5cf6;
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(390px, .92fr);
+    gap: 20px;
+    align-items: stretch;
+}
+
+.xcord-editor-main,
+.xcord-editor-preview-column {
+    min-width: 0;
+}
+
+.xcord-editor-header {
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 95% -20%, color-mix(in srgb, var(--xcord-editor-accent-2) 28%, transparent), transparent 48%),
+        linear-gradient(145deg, color-mix(in srgb, var(--xcord-editor-accent) 11%, var(--background-secondary)), var(--background-secondary));
+    box-shadow: 0 12px 32px rgb(0 0 0 / 14%);
+}
+
+.xcord-editor-heading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 13px;
+    align-items: center;
+    padding: 18px;
+}
+
+.xcord-editor-mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 13px;
+    color: white;
+    font-size: 18px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--xcord-editor-accent), var(--xcord-editor-accent-2));
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--xcord-editor-accent) 35%, transparent);
+}
+
+.xcord-editor-eyebrow {
+    margin-bottom: 2px;
+    color: var(--xcord-editor-accent);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.xcord-editor-heading h2,
+.xcord-editor-card-heading h3,
+.xcord-widget-editor h3 {
+    margin: 0;
+    color: var(--header-primary);
+}
+
+.xcord-editor-heading h2 {
+    font-size: 21px;
+    line-height: 1.15;
+}
+
+.xcord-editor-heading p,
+.xcord-editor-card-heading p {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.xcord-editor-status {
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--green-360, #23a55a) 30%, transparent);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--green-360, #23a55a) 8%, transparent);
+}
+
+.xcord-editor-status > span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green-360, #23a55a);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-360, #23a55a) 16%, transparent);
+}
+
+.xcord-editor-status.is-dirty {
+    border-color: color-mix(in srgb, var(--yellow-300, #f0b232) 35%, transparent);
+    background: color-mix(in srgb, var(--yellow-300, #f0b232) 9%, transparent);
+}
+
+.xcord-editor-status.is-dirty > span {
+    background: var(--yellow-300, #f0b232);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--yellow-300, #f0b232) 18%, transparent);
+}
+
+.xcord-editor-nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 12px 12px;
+    scrollbar-width: none;
+}
+
+.xcord-editor-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.xcord-editor-nav button {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    min-width: max-content;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 9px;
+    color: var(--interactive-normal);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    background: var(--background-modifier-hover);
+    transition: color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.xcord-editor-nav button:hover {
+    color: var(--interactive-hover);
+    background: var(--background-modifier-selected);
+    transform: translateY(-1px);
+}
+
+.xcord-editor-nav button > span {
+    color: var(--xcord-editor-accent);
+    font-weight: 800;
+}
+
+.xcord-editor-card {
+    scroll-margin-top: 12px;
+    margin-bottom: 14px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--background-secondary) 92%, transparent);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 9%);
+}
+
+.xcord-editor-card-heading {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 16px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.xcord-editor-card-heading::-webkit-details-marker,
+.xcord-editor-subsection > summary::-webkit-details-marker {
+    display: none;
+}
+
+.xcord-editor-card-heading:hover {
+    background: var(--background-modifier-hover);
+}
+
+.xcord-editor-card-index {
+    width: 4px;
+    height: 34px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: linear-gradient(var(--xcord-editor-accent), var(--xcord-editor-accent-2));
+}
+
+.xcord-editor-card-heading h3 {
+    font-size: 16px;
+}
+
+.xcord-editor-card-content {
+    padding: 2px 16px 16px;
+    border-top: 1px solid var(--background-modifier-accent);
+}
+
+.xcord-editor-chevron {
+    margin-left: auto;
+    color: var(--interactive-normal);
+    font-size: 20px;
+    line-height: 1;
+    transition: transform 160ms ease;
+}
+
+.xcord-editor-card[open] > .xcord-editor-card-heading .xcord-editor-chevron,
+.xcord-editor-subsection[open] > summary .xcord-editor-chevron {
+    transform: rotate(180deg);
+}
+
+.xcord-editor-subsection {
+    overflow: hidden;
+    margin-top: 10px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--background-tertiary) 52%, transparent);
+}
+
+.xcord-editor-subsection > summary {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.xcord-editor-subsection > summary:hover {
+    background: var(--background-modifier-hover);
+}
+
+.xcord-editor-subsection > summary strong,
+.xcord-editor-subsection > summary span {
+    display: block;
+}
+
+.xcord-editor-subsection > summary strong {
+    color: var(--header-primary);
+    font-size: 13px;
+}
+
+.xcord-editor-subsection > summary div > span {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.xcord-editor-subsection-content {
+    padding: 0 12px 12px;
+    border-top: 1px solid var(--background-modifier-accent);
+}
+
+.xcord-editor-card-content > h3,
+.xcord-widget-editor > h3 {
+    margin-top: 16px;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.xcord-editor-card-content > h3:first-child {
+    margin-top: 12px;
+}
+
+.xcord-editor-nested {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--background-tertiary) 52%, transparent);
+}
+
+.xcord-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--background-primary) 88%, transparent);
+    box-shadow: 0 -8px 28px rgb(0 0 0 / 16%);
+    backdrop-filter: blur(14px);
+}
+
+.xcord-editor-preview {
+    position: sticky;
+    top: 0;
+    overflow: hidden;
+    padding: 16px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 50% 0, color-mix(in srgb, var(--xcord-editor-accent) 10%, transparent), transparent 42%),
+        var(--background-secondary);
+    box-shadow: 0 14px 40px rgb(0 0 0 / 16%);
+}
+
+.xcord-editor-preview-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.xcord-editor-preview-heading h3 {
+    margin: 0;
+    color: var(--header-primary);
+    font-size: 15px;
+}
+
+.xcord-editor-preview-heading span {
+    padding: 5px 8px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--background-modifier-hover);
+}
+
+.xcord-widget-editor .xcord-widget-panel,
+.xcord-widget-editor .xcord-widget-preview {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-accent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--background-tertiary) 52%, transparent);
+}
+
+.xcord-widget-editor .xcord-widget-toolbar,
+.xcord-widget-editor .xcord-widget-item-heading {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.xcord-widget-editor .xcord-widget-item-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.xcord-widget-preview-hero {
+    position: relative;
+    display: flex;
+    min-height: 120px;
+    align-items: flex-end;
+    overflow: hidden;
+    padding: 16px;
+    border-radius: 10px;
+    color: white;
+    background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+    background-position: center;
+    background-size: cover;
+}
+
+.xcord-widget-preview-hero-title {
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.xcord-widget-preview-hero-description {
+    margin-top: 4px;
+    opacity: .78;
+    font-size: 12px;
+}
+
+.xcord-widget-preview-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.xcord-widget-preview-link {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    min-width: 0;
+    padding: 8px;
+    border-radius: 10px;
+    transition: background 140ms ease;
+}
+
+.xcord-widget-preview-link:hover {
+    background: var(--background-modifier-hover);
+}
+
+.xcord-widget-preview-icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    overflow: hidden;
+    place-items: center;
+    border-radius: 9px;
+    background: var(--background-tertiary);
+    font-weight: 700;
+}
+
+.xcord-widget-preview-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.xcord-widget-preview-copy {
+    min-width: 0;
+}
+
+.xcord-widget-preview-title,
+.xcord-widget-preview-host {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.xcord-widget-preview-title {
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.xcord-widget-preview-host {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+@media (max-width: 960px) {
+    .xcord-editor {
+        grid-template-columns: 1fr;
+    }
+
+    .xcord-editor-preview-column {
+        order: -1;
+    }
+
+    .xcord-editor-preview {
+        position: relative;
+    }
+}
+
+@media (max-width: 560px) {
+    .xcord-editor-heading {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .xcord-editor-status {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .xcord-widget-preview-links {
+        grid-template-columns: 1fr;
+    }
+}
+
+html[data-xcord-reduce-motion] .xcord-editor-nav button,
+html[data-xcord-reduce-motion] .xcord-widget-preview-link,
+html[data-xcord-reduce-motion] .xcord-editor-chevron {
+    transition: none;
+}

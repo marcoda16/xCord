@@ -23,6 +23,9 @@ import { fillToCss, fillToThemeColors } from "../lib/css";
 import { applyPreview, clearPreview, PREVIEW_CLASS, setDraftOverride } from "../lib/store";
 import type { CardBorder, CardBorderLayer, DynamicBackground, Fill, NativeEffectId, NativeNameEffect, XcordProfile } from "../types";
 import { emptyProfile } from "../types";
+import { EditorHeader, EditorSection, EditorSubsection } from "./EditorLayout";
+import { WidgetsEditor } from "./WidgetsEditor";
+import "./editor.css";
 
 interface ProfileModalProps {
     user: User;
@@ -1369,7 +1372,7 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [search, setSearch] = useState("");
-    const debounceRef = useRef<number>();
+    const debounceRef = useRef<number | undefined>(undefined);
 
     const load = (offset: number, base: CatalogEntry[], query: string) =>
         loadCatalogSection(key, offset, query, setLoading, setHasMore, base, setEntries);
@@ -1479,19 +1482,16 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
     const avatarEmbeddedSize = avatarIsEmbedded ? Math.round(avatarUrl.length * 0.75) : 0;
 
     return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
-            {/* Sin `alignItems: flex-start` a propósito: las dos columnas
-                deben estirarse a la altura completa de la fila (el
-                comportamiento por defecto de flex), o la de la derecha —más
-                corta que la de controles— se queda sin espacio propio donde
-                pegarse, y el `sticky` de más abajo deja de "sticky-ar" en
-                cuanto el scroll pasa de su propia altura.
-
-                Columna de controles. `minWidth: 0` es necesario para que un
-                flex item pueda encogerse por debajo del ancho de su
-                contenido —sin esto, texto largo empuja la columna entera y
-                la vista previa termina apretada o se cae de la fila. */}
-            <div style={{ flex: "1 1 380px", minWidth: 0 }}>
+        <>
+            <EditorHeader dirty={dirty} showSync={!!sync} />
+            <div className="xcord-editor">
+            <div className="xcord-editor-main">
+            <EditorSection
+                id="appearance"
+                title="Apariencia"
+                description="Colores, fondo dinámico y estilo del nombre."
+                defaultOpen
+            >
             <Forms.FormTitle tag="h3">Fondo del perfil</Forms.FormTitle>
             <FormSwitch
                 title="Personalizar el fondo"
@@ -1621,6 +1621,14 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 effect={draft.displayName}
                 onChange={displayName => setDraft({ ...draft, displayName })}
             />
+
+            </EditorSection>
+
+            <EditorSection
+                id="media"
+                title="Imágenes"
+                description="Banner y avatar personalizados, alojados o guardados localmente."
+            >
 
             <Forms.FormTitle tag="h3" className={Margins.top16}>Banner</Forms.FormTitle>
             <Text variant="text-sm/normal">
@@ -1880,13 +1888,31 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 </div>
             )}
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Tienda</Forms.FormTitle>
-            <Text variant="text-sm/normal">
-                Marcos y efectos de la tienda de Discord. Solo visual y solo en clientes con
-                xcord: no compra nada ni modifica tu cuenta.
-            </Text>
+            </EditorSection>
 
-            <Forms.FormTitle tag="h5" className={Margins.top8}>Marco del avatar</Forms.FormTitle>
+            <EditorSection
+                id="widgets"
+                title="Widgets"
+                description="Una tarjeta destacada y hasta cuatro enlaces para tu perfil completo."
+            >
+
+            <WidgetsEditor
+                value={draft.widgets}
+                onChange={widgets => setDraft({ ...draft, widgets })}
+            />
+
+            </EditorSection>
+
+            <EditorSection
+                id="shop"
+                title="Tienda"
+                description="Usa elementos visuales de Discord sin comprarlos ni modificar tu cuenta."
+            >
+
+            <EditorSubsection
+                title="Marco del avatar"
+                description="Decoraciones animadas alrededor de tu foto."
+            >
             <Text variant="text-xs/normal">
                 «Cargar catálogo» trae los más populares de la tienda, no solo los que ya posees.
                 Si el que buscas no aparece, clic derecho sobre un perfil con ese marco puesto →
@@ -1922,7 +1948,12 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             )}
             <CatalogLoadButtons section={decorations} />
 
-            <Forms.FormTitle tag="h5" className={Margins.top8}>Efecto de perfil</Forms.FormTitle>
+            </EditorSubsection>
+
+            <EditorSubsection
+                title="Efecto de perfil"
+                description="Animaciones que cubren la tarjeta completa."
+            >
 
             <CatalogSearchInput section={effects} />
             {effects.entries.length > 0 ? (
@@ -1940,7 +1971,12 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             )}
             <CatalogLoadButtons section={effects} />
 
-            <Forms.FormTitle tag="h5" className={Margins.top8}>Borde de la tarjeta</Forms.FormTitle>
+            </EditorSubsection>
+
+            <EditorSubsection
+                title="Borde de la tarjeta"
+                description="Marcos visuales renderizados por Discord."
+            >
             <Text variant="text-xs/normal">
                 Se renderiza con el propio código de Discord —el mismo campo que usa el efecto—,
                 no con una aproximación nuestra.
@@ -1970,7 +2006,12 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             {loadingBorder && <Text variant="text-xs/normal">Cargando piezas del borde…</Text>}
             <CatalogLoadButtons section={borders} />
 
-            <Forms.FormTitle tag="h5" className={Margins.top8}>Placa de nombre</Forms.FormTitle>
+            </EditorSubsection>
+
+            <EditorSubsection
+                title="Placa de nombre"
+                description="Diseños decorativos detrás del nombre."
+            >
             <Text variant="text-xs/normal">
                 Sin override que valga: Discord la lee directo del usuario. La pintamos con el
                 mismo truco que el resto — nuestro valor gana solo cuando no tienes una real puesta.
@@ -2003,7 +2044,17 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             )}
             <CatalogLoadButtons section={nameplates} />
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Fuentes personalizadas</Forms.FormTitle>
+            </EditorSubsection>
+
+            </EditorSection>
+
+            <EditorSection
+                id="fonts"
+                title="Fuentes personalizadas"
+                description="Carga tipografías propias desde una dirección HTTPS."
+                compact
+            >
+
             <Text variant="text-sm/normal">
                 URL de un .woff2 o .ttf. Una por línea, con el formato <code>Nombre = URL</code>.
             </Text>
@@ -2019,8 +2070,10 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 })}
             />
 
+            </EditorSection>
+
             {showActions && (
-                <Flex className={Margins.top16}>
+                <div className="xcord-editor-actions">
                     <Button disabled={!dirty} onClick={controller.save}>Guardar</Button>
                     <Button
                         color={Button.Colors.PRIMARY}
@@ -2030,12 +2083,15 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     <Button color={Button.Colors.RED} onClick={controller.resetAll}>
                         Restablecer todo
                     </Button>
-                </Flex>
+                </div>
             )}
 
             {sync && (
-                <>
-                    <Forms.FormTitle tag="h3" className={Margins.top16}>Sincronización</Forms.FormTitle>
+                <EditorSection
+                    id="sync"
+                    title="Sincronización"
+                    description="Publica tu perfil de forma verificada para otros usuarios de xcord."
+                >
                     <Text variant="text-sm/normal">
                         Publica tu perfil para que otros usuarios de xcord vean tus
                         personalizaciones. Se publica lo ya guardado, nunca un cambio sin
@@ -2103,26 +2159,16 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             }}
                         >Dejar de compartir</Button>
                     </Flex>
-                </>
+                </EditorSection>
             )}
             </div>
 
-            {/* Columna de vista previa: solo controla el ancho y deja que la
-                fila la estire de alto (ver la nota de arriba). El `sticky`
-                de verdad vive en el envoltorio interno — necesita una caja
-                exterior más alta que su propio contenido para tener "sitio"
-                donde quedarse pegado mientras la izquierda hace scroll,
-                cosa que un `div` de un solo nivel no puede darse a sí mismo.
-                `flexWrap: "wrap"` en el contenedor de arriba es lo que hace
-                que esto se caiga a una fila propia (debajo, ancho completo)
-                en vez de apretarse cuando no hay sitio — el mismo
-                comportamiento de antes en pantallas angostas. */}
-            <div style={{ flex: "1 1 420px", minWidth: 0 }}>
-              <div style={{ position: "sticky", top: 0 }}>
-                <Forms.FormTitle tag="h3">Vista previa</Forms.FormTitle>
-                <Text variant="text-xs/normal" className={Margins.bottom8}>
-                    Este es el componente real de Discord, no una imitación.
-                </Text>
+            <div className="xcord-editor-preview-column">
+              <div className="xcord-editor-preview">
+                <div className="xcord-editor-preview-heading">
+                    <h3>Vista previa</h3>
+                    <span>Componente real de Discord</span>
+                </div>
 
                 <div className={PREVIEW_CLASS}>
                     <ProfileModal
@@ -2150,7 +2196,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 </div>
               </div>
             </div>
-        </div>
+            </div>
+        </>
     );
 }
 

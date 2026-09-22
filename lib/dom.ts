@@ -15,7 +15,8 @@
 
 import { NS } from "./css";
 import { lookupUserIdByAvatarUrl } from "./store";
-import type { CardBorder } from "../types";
+import { removeAllWidgets, renderWidgets } from "./widgets";
+import type { CardBorder, ProfileWidgets } from "../types";
 
 /**
  * Selectores por clase parcial. Discord ofusca los nombres de clase con un
@@ -251,9 +252,14 @@ let roots: Element[] = [];
  * para no crear un ciclo de imports entre index.tsx y dom.ts.
  */
 let getBorderFor: ((userId: string) => CardBorder | null | undefined) | null = null;
+let getWidgetsFor: ((userId: string) => ProfileWidgets | null | undefined) | null = null;
 
 export function setBorderResolver(fn: typeof getBorderFor) {
     getBorderFor = fn;
+}
+
+export function setWidgetResolver(fn: typeof getWidgetsFor) {
+    getWidgetsFor = fn;
 }
 
 /**
@@ -294,9 +300,12 @@ function applyDecorations(root: Element, userId: string) {
     const avatarImg = [...root.querySelectorAll<HTMLImageElement>("img")].find(isAvatarImg);
     if (!avatarImg) return;
 
+    const cardBoundary = findCardBoundary(root, avatarImg);
+
     // Siempre se llama, incluso sin borde: si el usuario lo quitó, hay que
     // limpiar el que hubiera quedado de antes.
-    renderCardBorder(findCardBoundary(root, avatarImg), getBorderFor?.(userId));
+    renderCardBorder(cardBoundary, getBorderFor?.(userId));
+    renderWidgets(root, cardBoundary, getWidgetsFor?.(userId));
 }
 
 /** Vuelve a aplicar las clases, el borde y el anillo en todos los perfiles vivos. */
@@ -307,6 +316,11 @@ function retagAll() {
         const userId = root.getAttribute(`data-${NS}-user`);
         if (userId) applyDecorations(root, userId);
     }
+}
+
+/** Fuerza una pasada cuando cambia un perfil sin que Discord remonte su DOM. */
+export function refreshProfileDom() {
+    retagAll();
 }
 
 export type OnProfileSeen = (userId: string) => void;
@@ -431,4 +445,5 @@ export function stopObserver() {
     }
     for (const el of document.querySelectorAll(`.${BORDER_LAYERS_CLASS}`))
         el.remove();
+    removeAllWidgets();
 }

@@ -35,7 +35,7 @@ import Editor from "./components/Editor";
 import { EditorModal } from "./components/EditorModal";
 import { fillToThemeColors, NS } from "./lib/css";
 import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
-import { setBorderResolver, startObserver, stopObserver } from "./lib/dom";
+import { refreshProfileDom, setBorderResolver, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("./native")>;
@@ -131,6 +131,7 @@ export function saveOwnProfile(profile: XcordProfile) {
     // Fuerza el recálculo de los useMemo de Discord que parcheamos; vive en
     // el store para que el borrador del editor comparta el mismo contador.
     bumpProfileVersion();
+    refreshProfileDom();
     // El objeto base de Discord no cambia solo porque edites tu perfil, así
     // que el caché de xcordOverrideUser lo seguiría sirviendo con el efecto
     // viejo si no lo invalidamos a mano acá.
@@ -724,16 +725,19 @@ export default definePlugin({
         // para algún borde, se reactiva con una línea.
         // setBorderResolver(userId => resolveProfile(userId)?.cardBorder);
 
+        setWidgetResolver(userId => resolveProfile(userId)?.widgets);
+
         startObserver(userId => {
             if (!settings.store.syncEnabled) return;
             if (userId === own.userId) return;
-            void fetchProfile(userId);
+            void fetchProfile(userId).then(refreshProfileDom);
         });
     },
 
     stop() {
         stopObserver();
         setBorderResolver(null);
+        setWidgetResolver(null);
         teardown();
         ownProfile = null;
         AccessibilityStore?.removeChangeListener?.(syncReduceMotionAttribute);

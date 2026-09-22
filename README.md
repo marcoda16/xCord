@@ -2,8 +2,8 @@
 
 Capa de personalización visual para Discord, como plugin de [Vencord](https://vencord.dev).
 
-Degradados, GIFs en avatar y banner, fuentes personalizadas y efectos de texto — con preview
-en vivo y, opcionalmente, visibles para otros usuarios de xcord.
+Degradados, GIFs en avatar y banner, fuentes personalizadas, efectos de texto y widgets con
+enlaces — con preview en vivo y, opcionalmente, visibles para otros usuarios de xcord.
 
 ## Qué hace y qué no
 
