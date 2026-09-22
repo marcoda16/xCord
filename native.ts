@@ -231,6 +231,60 @@ const DISCORD_CLIENT_ID = "1540619781378539601";
 const OAUTH_CALLBACK_URL = `${SUPABASE_URL}/functions/v1/discord-oauth-callback`;
 const OAUTH_POLL_URL = `${SUPABASE_URL}/functions/v1/discord-oauth-poll`;
 
+const IMAGES_URL = `${SUPABASE_URL}/functions/v1/xcord-images`;
+
+export interface ImageSyncResult {
+    ok: boolean;
+    /** Tipo de imagen → URL pública en Storage. */
+    urls?: Record<string, string>;
+    /** Tipos que se borraron por dejar de aparecer en el perfil. */
+    deleted?: string[];
+    error?: string;
+}
+
+/**
+ * Sube las imágenes locales del perfil a Storage y borra las que ya no usa.
+ *
+ * La escritura en el bucket exige la service role key, que no puede vivir
+ * aquí: esta función solo habla con la Edge Function `xcord-images`, y es ella
+ * quien comprueba el secreto del claim y escribe. Desde el plugin sale la
+ * misma clave publicable que el resto de llamadas.
+ *
+ * `keep` son los tipos que siguen en uso tras esta publicación; todo lo demás
+ * bajo el prefijo del usuario se borra.
+ */
+export async function syncProfileImages(
+    _event: IpcMainInvokeEvent,
+    discordUserId: string,
+    secret: string,
+    uploads: { kind: string; contentType: string; data: string; }[],
+    keep: string[]
+): Promise<ImageSyncResult> {
+    try {
+        const res = await fetch(IMAGES_URL, {
+            method: "POST",
+            headers: supabaseHeaders(),
+            body: JSON.stringify({ discordUserId, secret, uploads, keep })
+        });
+
+        const body = await res.json().catch(() => null);
+
+        if (!res.ok || !body?.ok) {
+            return {
+                ok: false,
+                error: body?.error ?? `Supabase respondió ${res.status} al subir las imágenes.`
+            };
+        }
+
+        return { ok: true, urls: body.urls ?? {}, deleted: body.deleted ?? [] };
+    } catch (err) {
+        return {
+            ok: false,
+            error: err instanceof Error ? err.message : "No se pudo conectar con Supabase."
+        };
+    }
+}
+
 /** Abre el login de Discord en el navegador del sistema y devuelve el `state` para sondear. */
 export async function startDiscordLogin(
     _event: IpcMainInvokeEvent

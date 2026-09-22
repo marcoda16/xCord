@@ -97,15 +97,18 @@ function defaultFill(kind: Fill["kind"]): Fill {
     }
 }
 
+import { SUPPORTED_TYPES } from "../lib/profileImages";
+
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("../native")>;
 
 /** Tope de Catbox. Aquí el tamaño casi no importa: el archivo se va fuera. */
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 /**
- * Por encima de esto no dejamos incrustar. El archivo se guarda como texto
- * base64 dentro de settings.json, que Vencord lee y escribe constantemente;
- * un perfil de varios megas lo vuelve lento para todo lo demás.
+ * Tope de una imagen elegida del disco. Manda por dos lados: mientras no
+ * publicas se guarda como base64 en settings.json, que Vencord lee y escribe
+ * constantemente; y al publicar se sube a Supabase Storage, cuyo bucket
+ * rechaza cualquier objeto por encima de este mismo tamaño.
  */
 const MAX_EMBED_BYTES = 4 * 1024 * 1024;
 
@@ -128,7 +131,9 @@ function pickImageFile(maxBytes: number): Promise<{ dataUri: string; name: strin
     return new Promise(resolve => {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = "image/*";
+        // Lo mismo que acepta el bucket de Storage. Restringirlo aquí evita
+        // que el fallo aparezca al publicar, cuando ya no está claro por qué.
+        input.accept = SUPPORTED_TYPES.join(",");
 
         input.onchange = () => {
             const file = input.files?.[0];
@@ -1683,8 +1688,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         if (!picked) return;
 
                         if (picked.size > WARN_EMBED_BYTES && !confirm(
-                            `"${picked.name}" pesa ${formatSize(picked.size)}. Incrustado ocupará ` +
-                            `alrededor de ${formatSize(picked.size * 1.34)} en tus ajustes, que Vencord ` +
+                            `"${picked.name}" pesa ${formatSize(picked.size)}. Hasta que publiques se guarda ` +
+                            `en tus ajustes ocupando unos ${formatSize(picked.size * 1.34)}, y Vencord los ` +
                             "lee y escribe a menudo.\n\n¿Continuar de todas formas?"
                         )) return;
 
@@ -1693,7 +1698,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             banner: { ...draft.banner, image: { ...draft.banner?.image, url: picked.dataUri } }
                         });
                     }}
-                >Incrustar local…</Button>
+                >Elegir archivo local…</Button>
 
                 {draft.banner && (
                     <Button
@@ -1811,8 +1816,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         if (!picked) return;
 
                         if (picked.size > WARN_EMBED_BYTES && !confirm(
-                            `"${picked.name}" pesa ${formatSize(picked.size)}. Incrustado ocupará ` +
-                            `alrededor de ${formatSize(picked.size * 1.34)} en tus ajustes, que Vencord ` +
+                            `"${picked.name}" pesa ${formatSize(picked.size)}. Hasta que publiques se guarda ` +
+                            `en tus ajustes ocupando unos ${formatSize(picked.size * 1.34)}, y Vencord los ` +
                             "lee y escribe a menudo.\n\n¿Continuar de todas formas?"
                         )) return;
 
@@ -1821,7 +1826,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             avatar: { ...draft.avatar, image: { ...draft.avatar?.image, url: picked.dataUri } }
                         });
                     }}
-                >Incrustar local…</Button>
+                >Elegir archivo local…</Button>
 
                 {draft.avatar?.image && (
                     <Button

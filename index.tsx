@@ -34,6 +34,7 @@ import type { User } from "@vencord/discord-types";
 import Editor from "./components/Editor";
 import { EditorModal } from "./components/EditorModal";
 import { fillToThemeColors, NS } from "./lib/css";
+import { collectLocalImages, imageTag, withUploadedImages } from "./lib/profileImages";
 import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
 import { refreshProfileDom, setBorderResolver, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
@@ -92,8 +93,30 @@ const settings = definePluginSettings({
         description: "El secreto de publicación viene de un login verificado con Discord.",
         default: false,
         hidden: true
+    },
+    /**
+     * Huella y URL de cada imagen ya subida a Storage, por tipo. Sirve para no
+     * volver a subir lo que no ha cambiado: publicar un retoque de color no
+     * debería reenviar un banner de cuatro megas.
+     */
+    syncImages: {
+        type: OptionType.STRING,
+        description: "Imágenes del perfil ya subidas.",
+        default: "{}",
+        hidden: true
     }
 });
+
+type SyncedImage = { tag: string; url: string; };
+
+function readSyncedImages(): Record<string, SyncedImage> {
+    try {
+        const parsed = JSON.parse(settings.store.syncImages || "{}");
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+        return {};
+    }
+}
 
 /** Perfil propio, cacheado en memoria para no deserializar en cada render. */
 let ownProfile: XcordProfile | null = null;
@@ -202,7 +225,57 @@ export async function publishOwnProfile(): Promise<{ ok: boolean; error?: string
     if (!own.userId) return { ok: false, error: "No se pudo determinar tu usuario." };
 
     const secret = getOrCreateSyncSecret();
-    return Native.publishProfile(own.userId, secret, own);
+
+    // Las imágenes elegidas del disco viven en el perfil local como `data:`
+    // URI, que es lo que hace instantánea la vista previa. Al servidor no
+    // pueden ir así: se suben a Storage y la copia remota lleva sus URL.
+    const { ok: locals, unsupported } = collectLocalImages(own);
+
+    if (unsupported.length) {
+        return {
+            ok: false,
+            error: `No se pudieron preparar estas imágenes: ${unsupported.join(", ")}. `
+                + "Admitimos PNG, JPEG, GIF y WebP."
+        };
+    }
+
+    const known = readSyncedImages();
+    const urls: Record<string, string> = {};
+    const tags: Record<string, string> = {};
+    const uploads: typeof locals = [];
+    const keep: string[] = [];
+
+    for (const image of locals) {
+        const tag = await imageTag(image.data);
+        keep.push(image.kind);
+        tags[image.kind] = tag;
+
+        // Misma huella que la última vez: el objeto sigue en Storage y `keep`
+        // impide que lo borren, así que basta con reutilizar su URL.
+        const previous = known[image.kind];
+        if (previous?.tag === tag && previous.url) urls[image.kind] = previous.url;
+        else uploads.push(image);
+    }
+
+    // Se llama siempre, aunque no haya nada que subir: es también lo que borra
+    // las imágenes que el perfil ha dejado de usar.
+    const synced = await Native.syncProfileImages(own.userId, secret, uploads, keep);
+    if (!synced.ok) return { ok: false, error: `No se pudieron subir las imágenes: ${synced.error}` };
+
+    Object.assign(urls, synced.urls);
+
+    const remote = withUploadedImages(own, urls);
+    if (!remote) return { ok: false, error: "Faltó alguna imagen por subir. No se publicó nada." };
+
+    const result = await Native.publishProfile(own.userId, secret, remote);
+
+    if (result.ok) {
+        settings.store.syncImages = JSON.stringify(
+            Object.fromEntries(keep.map(kind => [kind, { tag: tags[kind], url: urls[kind] }]))
+        );
+    }
+
+    return result;
 }
 
 /** Retira el perfil propio de Supabase. No borra nada local. */
