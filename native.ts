@@ -10,6 +10,7 @@
  * el usuario pulsa el botón de subir en el editor.
  */
 
+import { CspPolicies, ImageSrc } from "@main/csp";
 import { shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
@@ -112,6 +113,20 @@ export async function fetchProfileEffects(
  * texto plano en la base de datos, solo su hash.
  */
 const SUPABASE_URL = "https://reiszfgtqtyumfaatajl.supabase.co";
+
+/**
+ * Vencord filtra por CSP qué hosts pueden cargar imágenes en el renderer, y
+ * su lista blanca trae `files.catbox.moe` pero no Supabase. Sin esta línea, un
+ * banner guardado en Storage no carga y el perfil se ve negro — el archivo
+ * está bien, es el cliente el que se niega a pedirlo.
+ *
+ * Vencord contempla justo esto: su `csp/index.ts` dice que un plugin puede
+ * añadir sus dominios importando `CspPolicies` desde su native. Solo el host
+ * de este proyecto, no `*.supabase.co`: no hay motivo para abrir el de nadie
+ * más. Requiere reiniciar Discord del todo, porque la cabecera se aplica al
+ * cargar la ventana.
+ */
+CspPolicies[new URL(SUPABASE_URL).host] = ImageSrc;
 const SUPABASE_KEY = "sb_publishable_0Bb4rGdNcrgcAeJTTSZvSg_gImsiVUb";
 
 function supabaseHeaders(extra?: Record<string, string>): Record<string, string> {

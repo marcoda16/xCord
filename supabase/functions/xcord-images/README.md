@@ -38,6 +38,26 @@ Comprobaciones antes de escribir: el id debe ser solo dígitos (cierra el paso a
 tipo debe estar en la lista, y los **magic bytes** deben coincidir con el tipo declarado — si no,
 el bucket aceptaría cualquier cosa etiquetada como imagen.
 
+## El cliente tiene que permitir el host
+
+Vencord filtra por CSP qué dominios pueden cargar imágenes en el renderer. Su lista blanca
+(`src/main/csp/index.ts`) trae `files.catbox.moe`, pero no Supabase, así que una imagen servida
+desde Storage se bloquea y el perfil se ve negro — el archivo está intacto y responde 200; es el
+cliente el que se niega a pedirlo.
+
+`native.ts` lo resuelve añadiendo solo el host de este proyecto:
+
+```ts
+import { CspPolicies, ImageSrc } from "@main/csp";
+CspPolicies[new URL(SUPABASE_URL).host] = ImageSrc;
+```
+
+Es el mecanismo que el propio Vencord documenta en ese archivo para plugins. Requiere **reiniciar
+Discord del todo**, porque la cabecera se aplica al cargar la ventana.
+
+Consecuencia al desplegar: quien siga con una versión anterior del plugin verá negras las imágenes
+alojadas en Storage. No hay forma de arreglarlo desde el servidor.
+
 ## Límites
 
 4 MB por imagen y 8 imágenes por publicación, en la función y también en el propio bucket
