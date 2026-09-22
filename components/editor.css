@@ -459,3 +459,29 @@ html[data-xcord-reduce-motion] .xcord-widget-preview-link,
 html[data-xcord-reduce-motion] .xcord-editor-chevron {
     transition: none;
 }
+
+.xcord-profile-entry {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--input-border, var(--background-modifier-accent));
+    border-radius: 8px;
+    background: var(--button-secondary-background, var(--background-secondary));
+    color: var(--brand-500, #5865f2);
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.xcord-profile-entry:hover {
+    background: var(--button-secondary-background-hover, var(--background-modifier-hover));
+}
+
+.xcord-profile-entry:focus-visible {
+    outline: 2px solid var(--brand-500, #5865f2);
+    outline-offset: 2px;
+}

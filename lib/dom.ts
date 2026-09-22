@@ -253,6 +253,9 @@ let roots: Element[] = [];
  */
 let getBorderFor: ((userId: string) => CardBorder | null | undefined) | null = null;
 let getWidgetsFor: ((userId: string) => ProfileWidgets | null | undefined) | null = null;
+let getEditActionFor: ((userId: string) => (() => void) | null) | null = null;
+
+const PROFILE_EDIT_BUTTON_CLASS = `${NS}-profile-entry`;
 
 export function setBorderResolver(fn: typeof getBorderFor) {
     getBorderFor = fn;
@@ -260,6 +263,48 @@ export function setBorderResolver(fn: typeof getBorderFor) {
 
 export function setWidgetResolver(fn: typeof getWidgetsFor) {
     getWidgetsFor = fn;
+}
+
+export function setProfileEditAction(fn: typeof getEditActionFor) {
+    getEditActionFor = fn;
+    retagAll();
+}
+
+/** Añade el acceso a xcord al final de las acciones del perfil propio. */
+function renderProfileEditButton(root: Element, userId: string) {
+    const existing = root.querySelector<HTMLButtonElement>(`.${PROFILE_EDIT_BUTTON_CLASS}`);
+    const onEdit = getEditActionFor?.(userId);
+    if (!onEdit) {
+        existing?.remove();
+        return;
+    }
+
+    // Discord cambia los sufijos de sus clases; el prefijo y el botón de
+    // mensaje son dos maneras de encontrar esta misma fila de acciones.
+    let row: HTMLElement | null = null;
+    const message = [...root.querySelectorAll<HTMLButtonElement>("button")]
+        .find(button => /^(Enviar mensaje|Send Message|Message)$/i.test(button.textContent?.trim() ?? ""));
+    for (let parent = message?.parentElement, depth = 0; parent && depth < 4; parent = parent.parentElement, depth++) {
+        if (parent.querySelectorAll("button").length >= 3) {
+            row = parent;
+            break;
+        }
+    }
+    row ??= root.querySelector<HTMLElement>('[class*="actionButtons"]');
+    if (!row) return;
+
+    // React puede reemplazar solo la fila sin desmontar el perfil entero.
+    if (existing && existing.parentElement === row) return;
+    existing?.remove();
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = PROFILE_EDIT_BUTTON_CLASS;
+    button.title = "Abrir xcord";
+    button.setAttribute("aria-label", "Abrir xcord");
+    button.textContent = "x";
+    button.addEventListener("click", onEdit);
+    row.appendChild(button);
 }
 
 /**
@@ -306,6 +351,7 @@ function applyDecorations(root: Element, userId: string) {
     // limpiar el que hubiera quedado de antes.
     renderCardBorder(cardBoundary, getBorderFor?.(userId));
     renderWidgets(root, cardBoundary, getWidgetsFor?.(userId));
+    renderProfileEditButton(cardBoundary, userId);
 }
 
 /** Vuelve a aplicar las clases, el borde y el anillo en todos los perfiles vivos. */
@@ -444,6 +490,8 @@ export function stopObserver() {
             el.classList.remove(className);
     }
     for (const el of document.querySelectorAll(`.${BORDER_LAYERS_CLASS}`))
+        el.remove();
+    for (const el of document.querySelectorAll(`.${PROFILE_EDIT_BUTTON_CLASS}`))
         el.remove();
     removeAllWidgets();
 }

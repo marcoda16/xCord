@@ -45,7 +45,7 @@ import {
     XCORD_VERSION
 } from "./lib/updates";
 import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
-import { refreshProfileDom, setBorderResolver, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
+import { refreshProfileDom, setBorderResolver, setProfileEditAction, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("./native")>;
@@ -878,6 +878,7 @@ export default definePlugin({
         // setBorderResolver(userId => resolveProfile(userId)?.cardBorder);
 
         setWidgetResolver(userId => resolveProfile(userId)?.widgets);
+        setProfileEditAction(userId => userId === UserStore.getCurrentUser()?.id ? openEditor : null);
 
         // Unos segundos de margen: al arrancar, el cliente tiene cosas más
         // urgentes que hacer que pedir un JSON, y un modal encima de la
@@ -897,6 +898,7 @@ export default definePlugin({
             updateCheckTimer = null;
         }
         stopObserver();
+        setProfileEditAction(null);
         setBorderResolver(null);
         setWidgetResolver(null);
         teardown();
