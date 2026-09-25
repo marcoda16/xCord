@@ -120,8 +120,14 @@ function findProfileRoot(img: Element): Element | null {
 
 /** Añade las clases que el motor de CSS espera, sin quitar las de Discord. */
 function tagElements(root: Element) {
+    // Las listas de amigos también contienen avatar__: solo personalizar el principal.
+    const mainAvatar = findMainAvatar(root);
+    const avatar = mainAvatar?.closest(SELECTORS.avatar);
+    for (const el of root.querySelectorAll(`.${NS}-avatar`))
+        if (el !== avatar) el.classList.remove(`${NS}-avatar`);
+    if (avatar && root.contains(avatar)) avatar.classList.add(`${NS}-avatar`);
+
     const map: Array<[string, string]> = [
-        [SELECTORS.avatar, `${NS}-avatar`],
         [SELECTORS.banner, `${NS}-banner`],
         [SELECTORS.background, `${NS}-bg`],
         [SELECTORS.dynamicBg, `${NS}-dynamic-bg`],
@@ -265,6 +271,12 @@ export function setWidgetResolver(fn: typeof getWidgetsFor) {
     getWidgetsFor = fn;
 }
 
+function findMainAvatar(root: Element): HTMLImageElement | undefined {
+    return [...root.querySelectorAll<HTMLImageElement>("img")].find(img =>
+        isAvatarImg(img) && findProfileRoot(img) === root
+    );
+}
+
 export function setProfileEditAction(fn: typeof getEditActionFor) {
     getEditActionFor = fn;
     retagAll();
@@ -363,7 +375,7 @@ function findCardBoundary(root: Element, avatarImg: Element): Element {
 }
 
 function applyDecorations(root: Element, userId: string) {
-    const avatarImg = [...root.querySelectorAll<HTMLImageElement>("img")].find(isAvatarImg);
+    const avatarImg = findMainAvatar(root);
     if (!avatarImg) return;
 
     const cardBoundary = findCardBoundary(root, avatarImg);
@@ -398,6 +410,8 @@ function processAvatar(img: HTMLImageElement, onSeen: OnProfileSeen) {
 
     const root = findProfileRoot(img);
     if (!root) return;
+    // Un amigo en común no puede reasignar el modal a otro usuario.
+    if (findMainAvatar(root) !== img) return;
 
     // Re-marcamos si el perfil cambió de usuario: Discord reutiliza el mismo
     // nodo al pasar de un perfil a otro sin cerrar el popout.

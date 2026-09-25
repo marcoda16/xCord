@@ -14,7 +14,7 @@
  * describe el formato del perfil y solo cambia cuando ese formato cambia.
  * Esta sube en cada publicación, aunque el perfil siga igual.
  */
-export const XCORD_VERSION = "1.0.0";
+export const XCORD_VERSION = "1.0.1";
 
 /** Dónde se publica el manifiesto, junto a las páginas del OAuth. */
 export const MANIFEST_URL = "https://marcoda16.github.io/xCord/version.json";

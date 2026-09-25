@@ -197,6 +197,13 @@ function dynamicBackgroundCss(profile: XcordProfile, scope: string): string {
         parts.push(`background-image: ${fillToCss(fill!)} !important;`);
     }
 
+    // El recorte compensa la escala: el límite final conserva el rectángulo
+    // original. Solo recortamos el fondo, sin cortar marcos ni decoraciones.
+    const scale = config && Number.isFinite(config.scale) && config.scale > 0 ? config.scale : 1;
+    const inset = (1 - 1 / scale) * 50;
+    parts.push(`transform: scale(${scale}) !important; transform-origin: center !important;`);
+    parts.push(`clip-path: inset(${inset}%) !important;`);
+
     if (config) {
         parts.push(`opacity: ${config.opacity};`);
         // El desenfoque difumina también los bordes y los vuelve transparentes.
@@ -210,7 +217,6 @@ function dynamicBackgroundCss(profile: XcordProfile, scope: string): string {
             // de rehacer la zona entera del perfil.
             parts.push("contain: paint; will-change: filter;");
         }
-        if (config.scale !== 1) parts.push(`transform: scale(${config.scale});`);
     }
 
     return `${scope} .${NS}-dynamic-bg { ${parts.join(" ")} }`;

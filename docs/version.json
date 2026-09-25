@@ -1,10 +1,11 @@
 {
-  "latest": "1.0.0",
+  "latest": "1.0.1",
   "title": "Nueva versión de xcord",
-  "message": "Ahora puedes compartir imágenes locales y añadir widgets a tu perfil.",
+  "message": "Corregimos el fondo del perfil y la visualización de avatares y placas de nombre.",
   "downloadUrl": "https://github.com/marcoda16/xCord#instalaci%C3%B3n-para-probar-el-plugin",
   "notes": [
-    "Las imágenes de tu equipo se suben al publicar, para que otros usuarios de xcord las vean.",
-    "Nuevo panel con una tarjeta destacada y hasta cuatro enlaces."
+    "El fondo ampliado permanece dentro de la tarjeta del perfil.",
+    "Los amigos en común muestran su propia imagen de perfil.",
+    "Las placas de nombre de otros usuarios permanecen visibles al renovarse la caché."
   ]
 }

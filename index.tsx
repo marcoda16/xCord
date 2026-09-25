@@ -44,7 +44,7 @@ import {
     shouldNotify,
     XCORD_VERSION
 } from "./lib/updates";
-import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, teardown } from "./lib/store";
+import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, needsProfileRefresh, teardown } from "./lib/store";
 import { refreshProfileDom, setBorderResolver, setProfileEditAction, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
@@ -329,7 +329,10 @@ function resolveProfile(userId: string): XcordProfile | null {
     // El borrador del editor manda mientras está abierto, para que el preview
     // vea al instante lo que no es CSS (banner, tema, efecto, borde).
     if (userId && userId === own.userId) return getDraftOverride() ?? own;
-    return getCached(userId) ?? null;
+    const cached = getCached(userId);
+    if (settings.store.syncEnabled && needsProfileRefresh(userId))
+        void fetchProfile(userId);
+    return cached ?? null;
 }
 
 /** "#ff00cc" → 16711884. Discord codifica los colores del nombre como enteros, no hex. */
@@ -364,7 +367,7 @@ function toDiscordNameEffect(effect: XcordProfile["displayName"]) {
  * nuevo en cada llamada y rompiendo cualquier comparación por referencia
  * (===) que React use para decidir si algo necesita re-renderizarse.
  */
-const userOverrideCache = new Map<string, { rawUser: unknown; merged: unknown; }>();
+const userOverrideCache = new Map<string, { rawUser: unknown; profileVersion: number; merged: unknown; }>();
 
 function xcordOverrideUser(user: any, userId: string): any {
     if (!user) return user;
@@ -382,10 +385,10 @@ function xcordOverrideUser(user: any, userId: string): any {
         if (!effect) return user;
 
         const cached = userOverrideCache.get(userId);
-        if (cached && cached.rawUser === user) return cached.merged;
+        if (cached && cached.rawUser === user && cached.profileVersion === getProfileVersion()) return cached.merged;
 
         const merged = virtualMerge(user, { displayNameStyles: effect });
-        userOverrideCache.set(userId, { rawUser: user, merged });
+        userOverrideCache.set(userId, { rawUser: user, profileVersion: getProfileVersion(), merged });
         return merged;
     } catch {
         return user;

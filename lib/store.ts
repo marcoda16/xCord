@@ -14,6 +14,8 @@ import { type XcordProfile, SCHEMA_VERSION } from "../types";
 const Native = VencordNative.pluginHelpers.xcord as PluginNative<typeof import("../native")>;
 
 const CACHE_TTL = 5 * 60 * 1000;
+/** Tras un fallo, esperar antes de reintentar sin ocultar el perfil anterior. */
+const RETRY_TTL = 60 * 1000;
 /** Usuarios que ya consultamos y no tienen perfil: no volvemos a preguntar tan pronto. */
 const NEGATIVE_TTL = 30 * 60 * 1000;
 /** Evita que recorrer muchos servidores deje perfiles en memoria toda la sesión. */
@@ -214,12 +216,21 @@ export function getCached(userId: string): XcordProfile | null | undefined {
     const now = Date.now();
     const ttl = entry.profile ? CACHE_TTL : NEGATIVE_TTL;
     if (now - entry.fetchedAt > ttl) {
-        cache.delete(userId);
-        return undefined;
+        // Una placa visible no debe desaparecer solo porque toque renovar
+        // la caché. La petición nueva se dispara desde resolveProfile.
+        if (!entry.profile) {
+            cache.delete(userId);
+            return undefined;
+        }
     }
 
     entry.lastAccessed = now;
     return entry.profile;
+}
+
+export function needsProfileRefresh(userId: string): boolean {
+    const entry = cache.get(userId);
+    return !!entry?.profile && Date.now() - entry.fetchedAt > CACHE_TTL && !inFlight.has(userId);
 }
 
 function cacheProfile(userId: string, profile: XcordProfile | null) {
@@ -249,22 +260,32 @@ function cacheProfile(userId: string, profile: XcordProfile | null) {
  * renderer bloquea peticiones a dominios externos, y `supabase.co` es uno.
  */
 export function fetchProfile(userId: string): Promise<XcordProfile | null> {
-    const cached = getCached(userId);
-    if (cached !== undefined) return Promise.resolve(cached);
-
     const existing = inFlight.get(userId);
     if (existing) return existing;
+
+    const cached = getCached(userId);
+    const entry = cache.get(userId);
+    if (cached !== undefined && entry && Date.now() - entry.fetchedAt <= (entry.profile ? CACHE_TTL : NEGATIVE_TTL))
+        return Promise.resolve(cached);
 
     const request = (async () => {
         try {
             const result = await Native.fetchRemoteProfile(userId);
+            if (!result.ok) throw new Error("No se pudo actualizar el perfil remoto");
             const body = result.ok ? result.profile?.profile ?? null : null;
             const profile = isValid(body) ? body : null;
             cacheProfile(userId, profile);
             if (profile) applyProfile(profile);
+            else if (cached) clearProfile(userId);
+            if (profile?.updatedAt !== cached?.updatedAt || !!profile !== !!cached) bumpProfileVersion();
             return profile;
         } catch {
-            // Sin red: cacheamos el fallo brevemente para no martillear el servidor.
+            // Sin red: conservar la última placa válida y reintentar luego.
+            if (cached) {
+                const stale = cache.get(userId);
+                if (stale) stale.fetchedAt = Date.now() - CACHE_TTL + RETRY_TTL;
+                return cached;
+            }
             cacheProfile(userId, null);
             return null;
         } finally {
