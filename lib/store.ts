@@ -6,6 +6,7 @@
  * Todo funciona sin servidor — simplemente no verás los perfiles de otros.
  */
 
+import * as DataStore from "@api/DataStore";
 import type { PluginNative } from "@utils/types";
 
 import { buildProfileCss, GLOBAL_KEYFRAMES, NS } from "./css";
@@ -200,6 +201,78 @@ export function teardown() {
     avatarUrlByUserId.clear();
 }
 
+/**
+ * Caché en disco de los perfiles ajenos.
+ *
+ * La caché en memoria desaparece al cerrar Discord, así que en cada arranque
+ * la primera vez que veías a alguien salía sin personalizar hasta que volvía
+ * la petición. Guardarla hace que al abrir Discord los perfiles de la gente
+ * que ya has visto estén puestos desde el primer fotograma, y la consulta al
+ * servidor pasa a ser una revalidación en segundo plano que nadie nota.
+ *
+ * Solo se guardan los positivos. Los negativos —"esta persona no tiene
+ * perfil"— se vuelven a averiguar solos y persistirlos retrasaría media hora
+ * la aparición de alguien que acaba de publicar el suyo.
+ */
+const PERSIST_KEY = "xcordProfileCache";
+const PERSIST_DEBOUNCE_MS = 5000;
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Trae la caché del arranque anterior. Llamar una vez, al iniciar el plugin. */
+export async function hydrateCache(): Promise<number> {
+    try {
+        const saved = await DataStore.get<Record<string, { profile: unknown; fetchedAt: number; }>>(PERSIST_KEY);
+        if (!saved) return 0;
+
+        const now = Date.now();
+        let restored = 0;
+
+        for (const [userId, entry] of Object.entries(saved)) {
+            if (!isValid(entry?.profile)) continue;
+
+            // `fetchedAt` se conserva tal cual: así queda caducado y el flujo
+            // normal lo revalida, pero mientras tanto ya hay algo que pintar.
+            cache.set(userId, { profile: entry.profile, fetchedAt: entry.fetchedAt, lastAccessed: now });
+            applyProfile(entry.profile);
+            restored++;
+        }
+
+        if (restored) bumpProfileVersion();
+        return restored;
+    } catch {
+        // Una caché ilegible no es motivo para que el plugin no arranque.
+        return 0;
+    }
+}
+
+function schedulePersist() {
+    if (persistTimer) return;
+    persistTimer = setTimeout(() => {
+        persistTimer = null;
+        void persistCache();
+    }, PERSIST_DEBOUNCE_MS);
+}
+
+async function persistCache() {
+    try {
+        const out: Record<string, { profile: XcordProfile; fetchedAt: number; }> = {};
+        for (const [userId, entry] of cache)
+            if (entry.profile) out[userId] = { profile: entry.profile, fetchedAt: entry.fetchedAt };
+
+        await DataStore.set(PERSIST_KEY, out);
+    } catch {
+        /* Que no se pueda guardar no debe romper nada en marcha. */
+    }
+}
+
+/** Olvida lo guardado en disco, además de lo que haya en memoria. */
+export async function clearPersistedCache(): Promise<void> {
+    try {
+        await DataStore.del(PERSIST_KEY);
+    } catch { /* nada que hacer */ }
+}
+
 function isValid(p: unknown): p is XcordProfile {
     return !!p && typeof p === "object"
         && (p as XcordProfile).version === SCHEMA_VERSION
@@ -236,6 +309,7 @@ export function needsProfileRefresh(userId: string): boolean {
 function cacheProfile(userId: string, profile: XcordProfile | null) {
     const now = Date.now();
     cache.set(userId, { profile, fetchedAt: now, lastAccessed: now });
+    schedulePersist();
 
     while (cache.size > MAX_CACHE_ENTRIES) {
         let oldest: string | undefined;
@@ -259,6 +333,58 @@ function cacheProfile(userId: string, profile: XcordProfile | null) {
  * Va por el proceso principal (`Native.fetchRemoteProfile`): la CSP del
  * renderer bloquea peticiones a dominios externos, y `supabase.co` es uno.
  */
+/**
+ * Ventana en la que se juntan los usuarios vistos antes de preguntar por
+ * ellos. Lo bastante corta para no retrasar nada perceptible, y suficiente
+ * para que una lista entera quepa en una sola petición.
+ */
+const BATCH_WINDOW_MS = 60;
+
+type PendingResult = { ok: boolean; profile?: { profile: unknown; updatedAt: string; } | null; };
+
+const pending = new Map<string, ((r: PendingResult) => void)[]>();
+let batchTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Apunta a un usuario a la próxima petición en lote.
+ *
+ * Antes cada perfil era su propio viaje al servidor: abrir la lista de amigos
+ * con treinta personas visibles disparaba treinta peticiones, y hasta que no
+ * volvían se veían los avatares sin personalizar. Ahora salen todas juntas.
+ */
+function enqueue(userId: string): Promise<PendingResult> {
+    return new Promise(resolve => {
+        const waiting = pending.get(userId);
+        if (waiting) {
+            waiting.push(resolve);
+            return;
+        }
+
+        pending.set(userId, [resolve]);
+        batchTimer ??= setTimeout(flushBatch, BATCH_WINDOW_MS);
+    });
+}
+
+async function flushBatch() {
+    batchTimer = null;
+    const batch = new Map(pending);
+    pending.clear();
+    if (!batch.size) return;
+
+    const ids = [...batch.keys()];
+
+    try {
+        const result = await Native.fetchRemoteProfiles(ids);
+        for (const [id, resolvers] of batch) {
+            const row = result.ok ? result.profiles?.[id] ?? null : null;
+            for (const resolve of resolvers) resolve({ ok: result.ok, profile: row });
+        }
+    } catch {
+        for (const resolvers of batch.values())
+            for (const resolve of resolvers) resolve({ ok: false });
+    }
+}
+
 export function fetchProfile(userId: string): Promise<XcordProfile | null> {
     const existing = inFlight.get(userId);
     if (existing) return existing;
@@ -270,9 +396,9 @@ export function fetchProfile(userId: string): Promise<XcordProfile | null> {
 
     const request = (async () => {
         try {
-            const result = await Native.fetchRemoteProfile(userId);
+            const result = await enqueue(userId);
             if (!result.ok) throw new Error("No se pudo actualizar el perfil remoto");
-            const body = result.ok ? result.profile?.profile ?? null : null;
+            const body = result.profile?.profile ?? null;
             const profile = isValid(body) ? body : null;
             cacheProfile(userId, profile);
             if (profile) applyProfile(profile);

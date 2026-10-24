@@ -44,7 +44,7 @@ import {
     shouldNotify,
     XCORD_VERSION
 } from "./lib/updates";
-import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, getProfileVersion, needsProfileRefresh, teardown } from "./lib/store";
+import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, clearPersistedCache, getProfileVersion, hydrateCache, needsProfileRefresh, teardown } from "./lib/store";
 import { refreshProfileDom, setBorderResolver, setProfileEditAction, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
@@ -881,6 +881,14 @@ export default definePlugin({
         // setBorderResolver(userId => resolveProfile(userId)?.cardBorder);
 
         setWidgetResolver(userId => resolveProfile(userId)?.widgets);
+
+        // Los perfiles de la sesión anterior se pintan antes de pedir nada.
+        // Sin esto, al abrir Discord la lista de amigos salía sin personalizar
+        // hasta que volvía la consulta, y parecía que el plugin no estaba
+        // activado. La revalidación llega después y no se percibe.
+        void hydrateCache().then(restored => {
+            if (restored) refreshProfileDom();
+        });
         setProfileEditAction(userId => userId === UserStore.getCurrentUser()?.id ? openEditor : null);
 
         // Unos segundos de margen: al arrancar, el cliente tiene cosas más
@@ -914,5 +922,6 @@ export default definePlugin({
     // Expuesto para el editor y para depurar desde la consola.
     saveOwnProfile,
     getOwnProfile,
-    clearProfile
+    clearProfile,
+    clearPersistedCache
 });

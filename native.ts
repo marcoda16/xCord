@@ -145,6 +145,46 @@ export interface RemoteProfile {
     updatedAt: string;
 }
 
+/**
+ * Los perfiles publicados de varios usuarios, en **una sola petición**.
+ *
+ * Antes se pedía uno por uno. Abrir la lista de amigos con treinta personas
+ * visibles eran treinta viajes al servidor, y hasta que no volvían se veían
+ * los avatares sin personalizar —el plugin parecía apagado—. PostgREST
+ * admite `in.(a,b,c)`, así que son treinta de golpe.
+ *
+ * Devuelve un mapa id → perfil. Los que no han publicado nada simplemente no
+ * aparecen en el mapa, y el llamante los cachea como negativos.
+ */
+export async function fetchRemoteProfiles(
+    _event: IpcMainInvokeEvent,
+    discordUserIds: string[]
+): Promise<{ ok: boolean; profiles?: Record<string, RemoteProfile>; error?: string; }> {
+    try {
+        const ids = [...new Set(discordUserIds)].filter(id => /^\d{5,25}$/.test(id));
+        if (!ids.length) return { ok: true, profiles: {} };
+
+        const url = `${SUPABASE_URL}/rest/v1/xcord_profiles`
+            + `?discord_user_id=in.(${ids.join(",")})`
+            + `&select=discord_user_id,profile,updated_at`;
+
+        const res = await fetch(url, { headers: supabaseHeaders() });
+        if (!res.ok) return { ok: false, error: `Supabase respondió ${res.status}.` };
+
+        const rows = await res.json() as Array<{ discord_user_id: string; profile: unknown; updated_at: string; }>;
+        const profiles: Record<string, RemoteProfile> = {};
+        for (const row of rows)
+            profiles[row.discord_user_id] = { profile: row.profile, updatedAt: row.updated_at };
+
+        return { ok: true, profiles };
+    } catch (err) {
+        return {
+            ok: false,
+            error: err instanceof Error ? err.message : "No se pudo conectar con Supabase."
+        };
+    }
+}
+
 /** El perfil publicado de un usuario, o `null` si no ha publicado ninguno. */
 export async function fetchRemoteProfile(
     _event: IpcMainInvokeEvent,
