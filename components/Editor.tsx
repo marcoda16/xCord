@@ -529,19 +529,29 @@ async function loadCatalogSection(
     setLoading: (v: boolean) => void,
     setHasMore: (v: boolean) => void,
     entries: CatalogEntry[],
-    apply: (entries: CatalogEntry[]) => void
+    apply: (entries: CatalogEntry[]) => void,
+    setMessage: (message: string) => void
 ) {
     setLoading(true);
+    setMessage("");
     try {
         const page = await fetchCatalogSection(key, offset, query);
         console.log(`[xcord] catálogo de ${key} (offset ${offset}, búsqueda "${query}"):`, page);
 
+        const total = entries.length + page.entries.length;
+
         if (!page.entries.length && offset === 0) {
-            alert(
-                "Discord respondió, pero no reconocí nada en esta sección.\n\n" +
-                "Mira la consola: dejé la respuesta cruda impresa para poder leer su forma."
-            );
-            return;
+            setMessage(query.trim()
+                ? "No se encontraron resultados. Prueba con otra búsqueda."
+                : "No se encontraron elementos en esta sección. Puedes volver a cargar el catálogo.");
+        } else if (query.trim() && page.hasMore) {
+            // El buscador consulta la tienda de Discord, que ordena por
+            // relevancia y devuelve de 24 en 24. Buscar "o" trae cientos de
+            // coincidencias y lo que buscas puede estar en la página 5, así
+            // que sin este aviso el elemento parece sencillamente no existir
+            // —pasó con un efecto que solo aparecía al teclear "ooo"—.
+            setMessage(`Mostrando ${total} resultado${total === 1 ? "" : "s"} y hay más. `
+                + "Pulsa «Cargar más» o escribe más letras para afinar.");
         }
 
         apply([...entries, ...page.entries]);
@@ -550,7 +560,7 @@ async function loadCatalogSection(
         // Sin esto la promesa se rechazaba en silencio y el botón parecía no
         // hacer nada en absoluto.
         console.error("[xcord] fallo al cargar el catálogo:", err);
-        alert(`Fallo al cargar el catálogo: ${err}`);
+        setMessage("No se pudo cargar el catálogo. Inténtalo de nuevo.");
     } finally {
         setLoading(false);
     }
@@ -1357,6 +1367,7 @@ export function useProfileDraft(initial: XcordProfile, onSave: (p: XcordProfile)
 
 interface CatalogSectionState {
     entries: CatalogEntry[];
+    message: string;
     search: string;
     /** Actualiza el cuadro de texto y dispara la búsqueda real (con demora). */
     setSearch: (v: string) => void;
@@ -1377,16 +1388,19 @@ function useCatalogSection(key: keyof Catalog): CatalogSectionState {
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [search, setSearch] = useState("");
-    const debounceRef = useRef<number | undefined>(undefined);
+    const [message, setMessage] = useState("");
+    const debounceRef = useRef<number>();
 
     const load = (offset: number, base: CatalogEntry[], query: string) =>
-        loadCatalogSection(key, offset, query, setLoading, setHasMore, base, setEntries);
+        loadCatalogSection(key, offset, query, setLoading, setHasMore, base, setEntries, setMessage);
 
     return {
         entries,
+        message,
         search,
         setSearch: (v: string) => {
             setSearch(v);
+            setMessage("");
             // Una búsqueda de verdad contra el servidor, no un filtro local —
             // por eso la demora: sin ella, cada tecla dispararía su propia
             // petición.
@@ -1413,6 +1427,11 @@ function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
                 placeholder="Buscar en la tienda…"
                 onChange={(v: string) => section.setSearch(v)}
             />
+            {section.message && (
+                <div role="status" aria-live="polite" className={Margins.top8}>
+                    <Text variant="text-sm/normal">{section.message}</Text>
+                </div>
+            )}
         </div>
     );
 }
