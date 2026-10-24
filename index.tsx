@@ -23,7 +23,7 @@ import { Devs } from "@utils/constants";
 import definePlugin, { OptionType, type PluginNative } from "@utils/types";
 import type { UserProfile } from "@vencord/discord-types";
 import { findStoreLazy } from "@webpack";
-import { Button, UserStore } from "@webpack/common";
+import { Button, RelationshipStore, UserStore } from "@webpack/common";
 import virtualMerge from "virtual-merge";
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
@@ -44,7 +44,7 @@ import {
     shouldNotify,
     XCORD_VERSION
 } from "./lib/updates";
-import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, clearPersistedCache, getProfileVersion, hydrateCache, needsProfileRefresh, teardown } from "./lib/store";
+import { applyProfile, bumpProfileVersion, clearProfile, fetchProfile, getCached, getDraftOverride, clearPersistedCache, getProfileVersion, hydrateCache, needsProfileRefresh, prefetchProfiles, teardown } from "./lib/store";
 import { refreshProfileDom, setBorderResolver, setProfileEditAction, setWidgetResolver, startObserver, stopObserver } from "./lib/dom";
 import { emptyProfile, type XcordProfile } from "./types";
 
@@ -153,6 +153,33 @@ function readSyncedImages(): Record<string, SyncedImage> {
 
 /** Temporizador del aviso de actualizaciones, para poder cancelarlo al parar. */
 let updateCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Temporizador de la precarga de amigos, por la misma razón. */
+let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Precarga los perfiles de tu lista de amigos.
+ *
+ * La lista no está lista en el instante en que arranca el plugin: Discord la
+ * rellena al terminar de conectar. Si llega vacía se reintenta una vez más
+ * tarde, en vez de concluir que no tienes amigos.
+ */
+function schedulePrefetch(delay: number, retries = 2) {
+    prefetchTimer = setTimeout(() => {
+        prefetchTimer = null;
+        if (!settings.store.syncEnabled) return;
+
+        const friends = RelationshipStore?.getFriendIDs?.() ?? [];
+        if (!friends.length) {
+            if (retries > 0) schedulePrefetch(delay * 2, retries - 1);
+            return;
+        }
+
+        void prefetchProfiles(friends).then(found => {
+            if (found) refreshProfileDom();
+        });
+    }, delay);
+}
 
 /** Perfil propio, cacheado en memoria para no deserializar en cada render. */
 let ownProfile: XcordProfile | null = null;
@@ -889,6 +916,10 @@ export default definePlugin({
         void hydrateCache().then(restored => {
             if (restored) refreshProfileDom();
         });
+
+        // Después, los amigos que aún no estén en caché. Con unos segundos de
+        // margen para no competir con la carga del cliente.
+        schedulePrefetch(3000);
         setProfileEditAction(userId => userId === UserStore.getCurrentUser()?.id ? openEditor : null);
 
         // Unos segundos de margen: al arrancar, el cliente tiene cosas más
@@ -907,6 +938,10 @@ export default definePlugin({
         if (updateCheckTimer !== null) {
             clearTimeout(updateCheckTimer);
             updateCheckTimer = null;
+        }
+        if (prefetchTimer !== null) {
+            clearTimeout(prefetchTimer);
+            prefetchTimer = null;
         }
         stopObserver();
         setProfileEditAction(null);

@@ -385,6 +385,67 @@ async function flushBatch() {
     }
 }
 
+/**
+ * Cuántos ids por consulta al precargar. Cien ids caben de sobra en una URL
+ * (~2 kB), y alguien con mil amigos sale en diez peticiones en vez de mil.
+ */
+const PREFETCH_CHUNK = 100;
+
+/**
+ * Trae de golpe los perfiles de una lista de usuarios, sin esperar a verlos.
+ *
+ * Se usa al arrancar con la lista de amigos: así, la primera vez que alguien
+ * aparece en pantalla, su perfil ya está en caché y sale personalizado desde
+ * el primer fotograma, en vez de tras un viaje al servidor.
+ *
+ * Se salta a quien ya tenga una entrada vigente o una petición en marcha, así
+ * que lo restaurado del disco no se pide dos veces. Las tandas van una detrás
+ * de otra a propósito: no hay prisa, y no tiene sentido saturar el servidor al
+ * arrancar.
+ */
+export async function prefetchProfiles(userIds: string[]): Promise<number> {
+    const now = Date.now();
+    const todo = [...new Set(userIds)].filter(id => {
+        if (inFlight.has(id)) return false;
+        const entry = cache.get(id);
+        if (!entry) return true;
+        return now - entry.fetchedAt > (entry.profile ? CACHE_TTL : NEGATIVE_TTL);
+    });
+
+    let found = 0;
+    let changed = false;
+
+    for (let i = 0; i < todo.length; i += PREFETCH_CHUNK) {
+        const chunk = todo.slice(i, i + PREFETCH_CHUNK);
+        try {
+            const result = await Native.fetchRemoteProfiles(chunk);
+            if (!result.ok) continue;
+
+            for (const id of chunk) {
+                const body = result.profiles?.[id]?.profile ?? null;
+                const profile = isValid(body) ? body : null;
+                const before = cache.get(id)?.profile ?? null;
+
+                cacheProfile(id, profile);
+                if (profile) {
+                    applyProfile(profile);
+                    found++;
+                } else if (before) {
+                    clearProfile(id);
+                }
+
+                if (profile?.updatedAt !== before?.updatedAt || !!profile !== !!before) changed = true;
+            }
+        } catch {
+            // Una tanda fallida no detiene las demás: esos perfiles se pedirán
+            // por el camino normal cuando aparezcan en pantalla.
+        }
+    }
+
+    if (changed) bumpProfileVersion();
+    return found;
+}
+
 export function fetchProfile(userId: string): Promise<XcordProfile | null> {
     const existing = inFlight.get(userId);
     if (existing) return existing;
