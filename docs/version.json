@@ -1,11 +1,12 @@
 {
-  "latest": "1.0.1",
+  "latest": "1.0.2",
   "title": "Nueva versión de xcord",
-  "message": "Corregimos el fondo del perfil y la visualización de avatares y placas de nombre.",
+  "message": "Paginación en los catálogos y correcciones en los efectos del nombre y el fondo del perfil.",
   "downloadUrl": "https://github.com/marcoda16/xCord#instalaci%C3%B3n-para-probar-el-plugin",
   "notes": [
-    "El fondo ampliado permanece dentro de la tarjeta del perfil.",
-    "Los amigos en común muestran su propia imagen de perfil.",
-    "Las placas de nombre de otros usuarios permanecen visibles al renovarse la caché."
+    "Páginas numeradas, Anterior y Siguiente en decoraciones, efectos, bordes y placas de nombre.",
+    "Las búsquedas vuelven a la primera página y descartan respuestas anteriores.",
+    "Los efectos del nombre usan la cantidad correcta de colores, sin relleno negro.",
+    "El fondo del perfil muestra solo los dos colores que admite Discord."
   ]
 }

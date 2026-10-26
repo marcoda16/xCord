@@ -519,54 +519,6 @@ async function fetchCardBorder(skuId: string): Promise<CardBorder | null> {
  * botón de efectos.
  */
 /**
- * Carga una página del catálogo y la añade a lo que ya había, en vez de
- * reemplazarlo — así "Cargar más" no borra lo que ya elegiste ver.
- */
-async function loadCatalogSection(
-    key: keyof Catalog,
-    offset: number,
-    query: string,
-    setLoading: (v: boolean) => void,
-    setHasMore: (v: boolean) => void,
-    entries: CatalogEntry[],
-    apply: (entries: CatalogEntry[]) => void,
-    setMessage: (message: string) => void
-) {
-    setLoading(true);
-    setMessage("");
-    try {
-        const page = await fetchCatalogSection(key, offset, query);
-        console.log(`[xcord] catálogo de ${key} (offset ${offset}, búsqueda "${query}"):`, page);
-
-        const total = entries.length + page.entries.length;
-
-        if (!page.entries.length && offset === 0) {
-            setMessage(query.trim()
-                ? "No se encontraron resultados. Prueba con otra búsqueda."
-                : "No se encontraron elementos en esta sección. Puedes volver a cargar el catálogo.");
-        } else if (query.trim() && page.hasMore) {
-            // El buscador consulta la tienda de Discord, que ordena por
-            // relevancia y devuelve de 24 en 24. Buscar "o" trae cientos de
-            // coincidencias y lo que buscas puede estar en la página 5, así
-            // que sin este aviso el elemento parece sencillamente no existir
-            // —pasó con un efecto que solo aparecía al teclear "ooo"—.
-            setMessage(`Mostrando ${total} resultado${total === 1 ? "" : "s"} y hay más. `
-                + "Pulsa «Cargar más» o escribe más letras para afinar.");
-        }
-
-        apply([...entries, ...page.entries]);
-        setHasMore(page.hasMore);
-    } catch (err) {
-        // Sin esto la promesa se rechazaba en silencio y el botón parecía no
-        // hacer nada en absoluto.
-        console.error("[xcord] fallo al cargar el catálogo:", err);
-        setMessage("No se pudo cargar el catálogo. Inténtalo de nuevo.");
-    } finally {
-        setLoading(false);
-    }
-}
-
-/**
  * Trae una página del catálogo de una sola sección desde la tienda de verdad.
  *
  * En dos pasos: `/shop/search` da la lista de skus del tipo pedido para esa
@@ -580,7 +532,7 @@ async function fetchCatalogSection(
     key: keyof Catalog,
     offset: number,
     query: string
-): Promise<{ entries: CatalogEntry[]; hasMore: boolean; }> {
+): Promise<{ entries: CatalogEntry[]; hasMore: boolean; total: number; }> {
     const itemType = SHOP_ITEM_TYPES[key];
     const q = query.trim();
 
@@ -616,7 +568,8 @@ async function fetchCatalogSection(
     for (const product of products) {
         if (product) scanCatalog(product, out);
     }
-    return { entries: out[key], hasMore: !!search?.pagination?.has_more };
+    return { entries: out[key], hasMore: !!search?.pagination?.has_more,
+        total: Math.max(0, Number(search?.pagination?.total) || 0) };
 }
 
 /**
@@ -1057,7 +1010,27 @@ function NameplatePreview({ entry, hovered, selected }: {
     );
 }
 
-/** Editor de un relleno: color plano o lista de paradas de degradado. */
+/** Discord renderiza el tema del perfil usando solo dos colores. */
+function BackgroundThemeEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => void; }) {
+    const colors = fillToThemeColors(fill).map(color => `#${color.toString(16).padStart(6, "0")}`);
+    const setColor = (index: number, color: string) => {
+        const stops = [...colors];
+        stops[index] = color;
+        onChange({ kind: "linear", angle: 180, stops });
+    };
+
+    return (
+        <Flex style={{ gap: "16px", flexWrap: "wrap" }}>
+            {colors.map((color, index) => (
+                <div key={index}>
+                    <Forms.FormTitle tag="h5">{index === 0 ? "Color principal" : "Color de acento"}</Forms.FormTitle>
+                    <ColorField value={color} onChange={hex => setColor(index, hex)} />
+                </div>
+            ))}
+        </Flex>
+    );
+}
+
 function FillEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => void; }) {
     const stops = fill.kind === "solid" ? [fill.color] : fill.stops;
 
@@ -1127,17 +1100,17 @@ function FillEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => voi
 /**
  * Los 8 efectos de nombre de Nitro, verificados contra `displayNameStyles`
  * real (id, nombre y cantidad de colores que Discord de verdad usa por
- * efecto — el resto del arreglo de 5 colores queda en 0/sin usar).
+ * efecto; cada color enviado se renderiza, incluido el negro).
  */
 const NATIVE_NAME_EFFECTS: Array<{ label: string; value: NativeEffectId; colors: number; }> = [
     { label: "Sólido", value: 1, colors: 1 },
     { label: "Degradado", value: 2, colors: 2 },
-    { label: "Neón", value: 3, colors: 2 },
-    { label: "Toon", value: 4, colors: 2 },
-    { label: "Pop", value: 5, colors: 2 },
+    { label: "Neón", value: 3, colors: 1 },
+    { label: "Toon", value: 4, colors: 1 },
+    { label: "Pop", value: 5, colors: 1 },
     { label: "Resplandor", value: 6, colors: 2 },
     { label: "Prisma (degradado animado)", value: 7, colors: 5 },
-    { label: "Gomoso", value: 8, colors: 2 }
+    { label: "Gomoso", value: 8, colors: 4 }
 ];
 
 const DEFAULT_NAME_EFFECT_COLORS = ["#ff00cc", "#3333ff", "#00ffcc", "#ffcc00", "#ff3366"];
@@ -1170,12 +1143,13 @@ function NativeNamePreview({ effect }: { effect: NativeNameEffect; }) {
     const user = UserStore.getCurrentUser();
     if (!user) return null;
 
-    const colors = [0, 0, 0, 0, 0];
-    effect.colors.slice(0, 5).forEach((hex, i) => { colors[i] = hexToInt(hex); });
+    const count = NATIVE_NAME_EFFECTS.find(spec => spec.value === effect.effectId)?.colors ?? 1;
+    const colors = Array.from({ length: count }, (_, i) =>
+        hexToInt(effect.colors[i] ?? DEFAULT_NAME_EFFECT_COLORS[i]));
 
     const nameProps = {
         userName: user.globalName || user.username,
-        displayNameStyles: { fontId: effect.fontId ?? 0, effectId: effect.effectId, colors },
+        displayNameStyles: { fontId: effect.fontId || 11, effectId: effect.effectId, colors },
         effectDisplayType: EFFECT_DISPLAY_TYPE_ANIMATED,
         loop: true
     };
@@ -1382,43 +1356,114 @@ interface CatalogSectionState {
 /** Cuánto esperar tras la última tecla antes de preguntarle al servidor. */
 const SEARCH_DEBOUNCE_MS = 400;
 
-/** Estado y carga paginada de una sección del catálogo, sin repetir por cada una. */
-function useCatalogSection(key: keyof Catalog): CatalogSectionState {
-    const [entries, setEntries] = useState<CatalogEntry[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [hasMore, setHasMore] = useState(false);
-    const [search, setSearch] = useState("");
-    const [message, setMessage] = useState("");
-    const debounceRef = useRef<number>();
-
-    const load = (offset: number, base: CatalogEntry[], query: string) =>
-        loadCatalogSection(key, offset, query, setLoading, setHasMore, base, setEntries, setMessage);
-
-    return {
-        entries,
-        message,
-        search,
-        setSearch: (v: string) => {
-            setSearch(v);
-            setMessage("");
-            // Una búsqueda de verdad contra el servidor, no un filtro local —
-            // por eso la demora: sin ella, cada tecla dispararía su propia
-            // petición.
-            window.clearTimeout(debounceRef.current);
-            debounceRef.current = window.setTimeout(() => load(0, [], v), SEARCH_DEBOUNCE_MS);
-        },
-        loading,
-        hasMore,
-        reload: () => load(0, [], search),
-        loadMore: () => load(entries.length, entries, search)
-    };
-}
-
 /**
  * Buscador contra el catálogo real de Discord, no un filtro sobre lo ya
  * cargado — encuentra algo recién agregado aunque todavía no sea popular.
  * No hace falta "Cargar catálogo" primero: escribir aquí ya trae resultados.
  */
+interface PaginatedCatalogState extends CatalogSectionState {
+    page: number;
+    totalPages: number;
+    loaded: boolean;
+    goToPage: (page: number) => void;
+}
+
+/** Las páginas reemplazan la cuadrícula y mantienen el elemento seleccionado. */
+function useCatalogPages(key: keyof Catalog): PaginatedCatalogState {
+    const [entries, setEntries] = useState<CatalogEntry[]>([]);
+    const [search, setSearch] = useState("");
+    const [message, setMessage] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const requestRef = useRef(0);
+    const debounceRef = useRef<number>();
+
+    useEffect(() => () => {
+        window.clearTimeout(debounceRef.current);
+        requestRef.current++;
+    }, []);
+
+    async function load(nextPage: number, query: string) {
+        const request = ++requestRef.current;
+        setLoading(true);
+        setMessage("");
+        try {
+            const result = await fetchCatalogSection(key, (nextPage - 1) * CATALOG_PAGE_SIZE, query);
+            if (request !== requestRef.current) return;
+            setEntries(result.entries);
+            setPage(nextPage);
+            setTotalPages(Math.max(1, Math.ceil(result.total / CATALOG_PAGE_SIZE), nextPage + (result.hasMore ? 1 : 0)));
+            setHasMore(result.hasMore);
+            setLoaded(true);
+            if (!result.entries.length) setMessage("No se encontraron resultados. Prueba con otra búsqueda.");
+        } catch (err) {
+            if (request !== requestRef.current) return;
+            console.error("[xcord] fallo al cargar el catálogo:", err);
+            setMessage("No se pudo cargar el catálogo. Inténtalo de nuevo.");
+        } finally {
+            if (request === requestRef.current) setLoading(false);
+        }
+    }
+
+    function goToPage(nextPage: number) {
+        window.clearTimeout(debounceRef.current);
+        void load(nextPage, search);
+    }
+
+    return {
+        entries, search, message, loading, loaded, page, totalPages, hasMore,
+        setSearch: value => {
+            setSearch(value);
+            setMessage("");
+            setLoading(true);
+            requestRef.current++;
+            window.clearTimeout(debounceRef.current);
+            debounceRef.current = window.setTimeout(() => { void load(1, value); }, SEARCH_DEBOUNCE_MS);
+        },
+        reload: () => goToPage(1),
+        loadMore: () => goToPage(page + 1),
+        goToPage
+    };
+}
+
+/** Ventana compacta de páginas con los extremos siempre accesibles. */
+function catalogPageNumbers(page: number, total: number): number[] {
+    const start = Math.max(1, Math.min(page - 3, total - 6));
+    return [...new Set([1, ...Array.from({ length: Math.min(7, total) }, (_, i) => start + i), total])];
+}
+
+function CatalogPagination({ section }: { section: PaginatedCatalogState; }) {
+    if (!section.loaded) return <CatalogLoadButtons section={section} />;
+    const pages = catalogPageNumbers(section.page, section.totalPages);
+    return (
+        <nav aria-label="Páginas del catálogo" aria-busy={section.loading}
+            className={Margins.top8} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "6px" }}>
+            <Button size={Button.Sizes.SMALL} color={Button.Colors.PRIMARY}
+                disabled={section.loading || section.page === 1}
+                onClick={() => section.goToPage(section.page - 1)}>‹ Anterior</Button>
+            {pages.map((page, i) => (
+                <div key={page} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {i > 0 && page - pages[i - 1] > 1 && <span aria-hidden="true">…</span>}
+                    <button type="button" aria-label={`Página ${page}`}
+                        aria-current={page === section.page ? "page" : undefined}
+                        disabled={section.loading} onClick={() => section.goToPage(page)}
+                        style={{ border: 0, borderRadius: "50%", minWidth: "30px", height: "30px", padding: "0 6px",
+                            font: "inherit", fontWeight: 600, cursor: section.loading ? "wait" : "pointer",
+                            color: page === section.page ? "white" : "var(--text-normal)",
+                            background: page === section.page ? "var(--brand-500)" : "transparent" }}>{page}</button>
+                </div>
+            ))}
+            <Button size={Button.Sizes.SMALL} color={Button.Colors.PRIMARY}
+                disabled={section.loading || section.page >= section.totalPages}
+                onClick={() => section.goToPage(section.page + 1)}>Siguiente ›</Button>
+            {section.loading && <span role="status">Cargando…</span>}
+        </nav>
+    );
+}
+
 function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
     return (
         <div className={Margins.top8}>
@@ -1489,10 +1534,10 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
     // El catálogo de cada sección se pide bajo demanda, no al abrir el editor:
     // es una petición de red y la mayoría de las visitas no van a tocar
     // ninguna sección de la tienda.
-    const decorations = useCatalogSection("decorations");
-    const effects = useCatalogSection("effects");
-    const borders = useCatalogSection("borders");
-    const nameplates = useCatalogSection("nameplates");
+    const decorations = useCatalogPages("decorations");
+    const effects = useCatalogPages("effects");
+    const borders = useCatalogPages("borders");
+    const nameplates = useCatalogPages("nameplates");
 
     // Un data-URI no cabe en un campo de texto ni tiene sentido mostrarlo, así
     // que el input pasa a indicar el tamaño de lo incrustado.
@@ -1527,31 +1572,12 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
             />
             {draft.background && (
                 <div style={{ paddingLeft: "12px" }}>
-                    <FillEditor
+                    <BackgroundThemeEditor
                         fill={draft.background.fill}
                         onChange={fill => setDraft({
                             ...draft,
-                            background: { ...draft.background, fill }
+                            background: { fill }
                         })}
-                    />
-
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>
-                        Atenuar: {Math.round((draft.background.dim ?? 0) * 100)}%
-                    </Forms.FormTitle>
-                    <Text variant="text-xs/normal">
-                        Discord pinta los colores del tema a plena saturación. Súbelo si el
-                        fondo resulta demasiado brillante detrás del texto.
-                    </Text>
-                    <Slider
-                        minValue={0}
-                        maxValue={0.9}
-                        initialValue={draft.background.dim ?? 0}
-                        onValueChange={(v: number) => setDraft({
-                            ...draft,
-                            background: { ...draft.background!, dim: Number(v.toFixed(2)) }
-                        })}
-                        markers={[0, 0.2, 0.4, 0.6, 0.9]}
-                        onMarkerRender={(v: number) => `${Math.round(v * 100)}%`}
                     />
                 </div>
             )}
@@ -1969,7 +1995,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     }}
                 />
             )}
-            <CatalogLoadButtons section={decorations} />
+            <CatalogPagination section={decorations} />
 
             </EditorSubsection>
 
@@ -1992,7 +2018,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     onChange={(id: string) => setDraft({ ...draft, profileEffectId: id || undefined })}
                 />
             )}
-            <CatalogLoadButtons section={effects} />
+            <CatalogPagination section={effects} />
 
             </EditorSubsection>
 
@@ -2027,7 +2053,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 <Text variant="text-xs/normal">Pulsa «Cargar catálogo» para poder elegir uno.</Text>
             )}
             {loadingBorder && <Text variant="text-xs/normal">Cargando piezas del borde…</Text>}
-            <CatalogLoadButtons section={borders} />
+            <CatalogPagination section={borders} />
 
             </EditorSubsection>
 
@@ -2065,7 +2091,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     })}
                 />
             )}
-            <CatalogLoadButtons section={nameplates} />
+            <CatalogPagination section={nameplates} />
 
             </EditorSubsection>
 

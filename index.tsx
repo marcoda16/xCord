@@ -380,11 +380,12 @@ function isNativeNameEffect(value: unknown): value is NonNullable<XcordProfile["
  */
 function toDiscordNameEffect(effect: XcordProfile["displayName"]) {
     if (!isNativeNameEffect(effect)) return undefined;
-    // Discord siempre trae 5 casillas (una por gotero en su propio editor);
-    // las que faltan se completan en 0, que es como codifica "sin usar".
-    const colors = [0, 0, 0, 0, 0];
-    effect.colors.slice(0, 5).forEach((hex, i) => { colors[i] = hexToUint(hex); });
-    return { effectId: effect.effectId, colors, fontId: effect.fontId ?? 0 };
+    // Discord renderiza todas las entradas: no rellenar con negro.
+    const counts: Record<number, number> = { 1: 1, 2: 2, 3: 1, 4: 1, 5: 1, 6: 2, 7: 5, 8: 4 };
+    const defaults = ["#ff00cc", "#3333ff", "#00ffcc", "#ffcc00", "#ff3366"];
+    const colors = Array.from({ length: counts[effect.effectId] ?? 1 }, (_, i) =>
+        hexToUint(effect.colors[i] ?? defaults[i]));
+    return { effectId: effect.effectId, colors, fontId: effect.fontId || 11 };
 }
 
 /**
