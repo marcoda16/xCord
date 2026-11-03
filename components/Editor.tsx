@@ -8,12 +8,15 @@
  * imitación cuidadosa que se desincroniza a la tercera actualización.
  */
 
+import { Button } from "@components/Button";
+import { Text } from "@components/Text";
+import { Heading } from "@components/Heading";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { Flex } from "@components/Flex";
 import { Margins } from "@utils/margins";
 import { extractAndLoadChunksLazy, findByCodeLazy, findComponentByCodeLazy } from "@webpack";
 import { FormSwitch } from "@components/FormSwitch";
-import { Button, Clickable, ColorPicker, Forms, RestAPI, Select, Slider, Text, TextInput, useEffect, useRef, useState } from "@webpack/common";
+import { Clickable, ColorPicker, RestAPI, Select, Slider, TextInput, useEffect, useRef, useState } from "@webpack/common";
 import type { User } from "@vencord/discord-types";
 import { UserStore } from "@webpack/common";
 
@@ -690,8 +693,8 @@ function AngleControl({ angle, onChange }: { angle: number; onChange: (a: number
     return (
         <div className={Margins.top8}>
             <Button
-                size={Button.Sizes.SMALL}
-                color={Button.Colors.PRIMARY}
+                size="small"
+                variant="secondary"
                 onClick={() => setOpen(!open)}
             >{`Ángulo: ${angle}° ${open ? "▲" : "▼"}`}</Button>
 
@@ -701,8 +704,8 @@ function AngleControl({ angle, onChange }: { angle: number; onChange: (a: number
                         {ANGLE_PRESETS.map(preset => (
                             <Button
                                 key={preset.value}
-                                size={Button.Sizes.SMALL}
-                                color={angle === preset.value ? Button.Colors.BRAND : Button.Colors.PRIMARY}
+                                size="small"
+                                variant={angle === preset.value ? "primary" : "secondary"}
                                 onClick={() => onChange(preset.value)}
                             >{preset.label}</Button>
                         ))}
@@ -1023,7 +1026,7 @@ function BackgroundThemeEditor({ fill, onChange }: { fill: Fill; onChange: (f: F
         <Flex style={{ gap: "16px", flexWrap: "wrap" }}>
             {colors.map((color, index) => (
                 <div key={index}>
-                    <Forms.FormTitle tag="h5">{index === 0 ? "Color principal" : "Color de acento"}</Forms.FormTitle>
+                    <Heading tag="h5">{index === 0 ? "Color principal" : "Color de acento"}</Heading>
                     <ColorField value={color} onChange={hex => setColor(index, hex)} />
                 </div>
             ))}
@@ -1071,14 +1074,14 @@ function FillEditor({ fill, onChange }: { fill: Fill; onChange: (f: Fill) => voi
                 {fill.kind !== "solid" && (
                     <>
                         <Button
-                            size={Button.Sizes.SMALL}
-                            color={Button.Colors.PRIMARY}
+                            size="small"
+                            variant="secondary"
                             onClick={() => onChange({ ...fill, stops: [...fill.stops, "#ffffff"] })}
                         >+ color</Button>
                         {stops.length > 2 && (
                             <Button
-                                size={Button.Sizes.SMALL}
-                                color={Button.Colors.RED}
+                                size="small"
+                                variant="dangerPrimary"
                                 onClick={() => onChange({ ...fill, stops: fill.stops.slice(0, -1) })}
                             >− color</Button>
                         )}
@@ -1165,11 +1168,11 @@ function NativeNamePreview({ effect }: { effect: NativeNameEffect; }) {
                 <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
                         <UserNameWithEffects {...nameProps} />
-                        <Text variant="text-xs/normal" style={{ color: "var(--text-muted)" }}>
+                        <Text size="xs" weight="normal" style={{ color: "var(--text-muted)" }}>
                             hoy a las 12:00
                         </Text>
                     </div>
-                    <Text variant="text-sm/normal" style={{ color: "var(--text-normal)" }}>
+                    <Text size="sm" weight="normal" style={{ color: "var(--text-normal)" }}>
                         Así se ve tu nombre en los mensajes
                     </Text>
                 </div>
@@ -1228,12 +1231,12 @@ function NativeNameEffectEditor({ effect, onChange }: {
 
             {enabled && (
                 <div style={{ paddingLeft: "12px" }}>
-                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                    <Text size="xs" weight="normal" className={Margins.bottom8}>
                         Es el mismo efecto de Nitro que usa Discord: se ve igual en el perfil,
                         los mensajes y la lista de miembros.
                     </Text>
 
-                    <Forms.FormTitle tag="h5">Efecto</Forms.FormTitle>
+                    <Heading tag="h5">Efecto</Heading>
                     <Select
                         options={NATIVE_NAME_EFFECTS}
                         select={setEffectId}
@@ -1253,9 +1256,9 @@ function NativeNameEffectEditor({ effect, onChange }: {
                         }}
                     />
 
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                    <Heading tag="h5" className={Margins.top8}>
                         {spec.colors === 1 ? "Color" : "Colores"}
-                    </Forms.FormTitle>
+                    </Heading>
                     <Flex style={{ gap: "8px", flexWrap: "wrap" }}>
                         {Array.from({ length: spec.colors }, (_, i) => (
                             <ColorField
@@ -1266,9 +1269,9 @@ function NativeNameEffectEditor({ effect, onChange }: {
                         ))}
                     </Flex>
 
-                    <Forms.FormTitle tag="h5" className={Margins.top16}>
+                    <Heading tag="h5" className={Margins.top16}>
                         Vista previa en mensajes y lista de miembros
-                    </Forms.FormTitle>
+                    </Heading>
                     <NativeNamePreview effect={current} />
                 </div>
             )}
@@ -1379,7 +1382,7 @@ function useCatalogPages(key: keyof Catalog): PaginatedCatalogState {
     const [totalPages, setTotalPages] = useState(1);
     const [hasMore, setHasMore] = useState(false);
     const requestRef = useRef(0);
-    const debounceRef = useRef<number>();
+    const debounceRef = useRef<number | undefined>(undefined);
 
     useEffect(() => () => {
         window.clearTimeout(debounceRef.current);
@@ -1441,7 +1444,7 @@ function CatalogPagination({ section }: { section: PaginatedCatalogState; }) {
     return (
         <nav aria-label="Páginas del catálogo" aria-busy={section.loading}
             className={Margins.top8} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "6px" }}>
-            <Button size={Button.Sizes.SMALL} color={Button.Colors.PRIMARY}
+            <Button size="small" variant="secondary"
                 disabled={section.loading || section.page === 1}
                 onClick={() => section.goToPage(section.page - 1)}>‹ Anterior</Button>
             {pages.map((page, i) => (
@@ -1456,7 +1459,7 @@ function CatalogPagination({ section }: { section: PaginatedCatalogState; }) {
                             background: page === section.page ? "var(--brand-500)" : "transparent" }}>{page}</button>
                 </div>
             ))}
-            <Button size={Button.Sizes.SMALL} color={Button.Colors.PRIMARY}
+            <Button size="small" variant="secondary"
                 disabled={section.loading || section.page >= section.totalPages}
                 onClick={() => section.goToPage(section.page + 1)}>Siguiente ›</Button>
             {section.loading && <span role="status">Cargando…</span>}
@@ -1474,7 +1477,7 @@ function CatalogSearchInput({ section }: { section: CatalogSectionState; }) {
             />
             {section.message && (
                 <div role="status" aria-live="polite" className={Margins.top8}>
-                    <Text variant="text-sm/normal">{section.message}</Text>
+                    <Text size="sm" weight="normal">{section.message}</Text>
                 </div>
             )}
         </div>
@@ -1486,8 +1489,8 @@ function CatalogLoadButtons({ section }: { section: CatalogSectionState; }) {
     return (
         <Flex className={Margins.top8}>
             <Button
-                size={Button.Sizes.SMALL}
-                color={Button.Colors.PRIMARY}
+                size="small"
+                variant="secondary"
                 disabled={section.loading}
                 onClick={section.reload}
             >
@@ -1497,8 +1500,8 @@ function CatalogLoadButtons({ section }: { section: CatalogSectionState; }) {
 
             {section.entries.length > 0 && section.hasMore && (
                 <Button
-                    size={Button.Sizes.SMALL}
-                    color={Button.Colors.PRIMARY}
+                    size="small"
+                    variant="secondary"
                     disabled={section.loading}
                     onClick={section.loadMore}
                 >{section.loading ? "Cargando…" : "Cargar más"}</Button>
@@ -1560,7 +1563,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 title="Apariencia"
                 description="Colores, fondo dinámico y estilo del nombre."
             >
-            <Forms.FormTitle tag="h3">Fondo del perfil</Forms.FormTitle>
+            <Heading tag="h3">Fondo del perfil</Heading>
             <FormSwitch
                 title="Personalizar el fondo"
                 value={!!draft.background}
@@ -1582,8 +1585,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 </div>
             )}
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Fondo dinámico</Forms.FormTitle>
-            <Text variant="text-sm/normal">
+            <Heading tag="h3" className={Margins.top16}>Fondo dinámico</Heading>
+            <Text size="sm" weight="normal">
                 La capa ampliada y desenfocada detrás de la columna derecha del perfil.
             </Text>
             <FormSwitch
@@ -1623,9 +1626,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             </div>
                         )}
 
-                        <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        <Heading tag="h5" className={Margins.top8}>
                             Desenfoque: {dyn.blur}px
-                        </Forms.FormTitle>
+                        </Heading>
                         <Slider
                             minValue={0}
                             maxValue={80}
@@ -1635,9 +1638,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             onMarkerRender={(v: number) => `${v}px`}
                         />
 
-                        <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        <Heading tag="h5" className={Margins.top8}>
                             Opacidad: {Math.round(dyn.opacity * 100)}%
-                        </Forms.FormTitle>
+                        </Heading>
                         <Slider
                             minValue={0}
                             maxValue={1}
@@ -1647,10 +1650,10 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             onMarkerRender={(v: number) => `${Math.round(v * 100)}%`}
                         />
 
-                        <Forms.FormTitle tag="h5" className={Margins.top8}>
+                        <Heading tag="h5" className={Margins.top8}>
                             Ampliación: {dyn.scale.toFixed(2)}×
-                        </Forms.FormTitle>
-                        <Text variant="text-xs/normal">
+                        </Heading>
+                        <Text size="xs" weight="normal">
                             Súbela si con mucho desenfoque ves un halo en los bordes.
                         </Text>
                         <Slider
@@ -1665,7 +1668,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 );
             })()}
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Nombre para mostrar</Forms.FormTitle>
+            <Heading tag="h3" className={Margins.top16}>Nombre para mostrar</Heading>
             <NativeNameEffectEditor
                 effect={draft.displayName}
                 onChange={displayName => setDraft({ ...draft, displayName })}
@@ -1679,8 +1682,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 description="Banner y avatar personalizados, alojados o guardados localmente."
             >
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Banner</Forms.FormTitle>
-            <Text variant="text-sm/normal">
+            <Heading tag="h3" className={Margins.top16}>Banner</Heading>
+            <Text size="sm" weight="normal">
                 Pega una URL o elige un archivo de tu equipo. Con URL lo renderiza Discord y anima
                 mejor; un archivo local se incrusta en tus ajustes y lo pintamos nosotros.
             </Text>
@@ -1696,7 +1699,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
             <Flex className={Margins.top8}>
                 <Button
-                    size={Button.Sizes.SMALL}
+                    size="small"
                     disabled={uploading}
                     onClick={async () => {
                         const picked = await pickImageFile(MAX_UPLOAD_BYTES);
@@ -1724,8 +1727,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 >{uploading ? "Subiendo…" : "Subir archivo…"}</Button>
 
                 <Button
-                    size={Button.Sizes.SMALL}
-                    color={Button.Colors.PRIMARY}
+                    size="small"
+                    variant="secondary"
                     disabled={uploading}
                     onClick={async () => {
                         const picked = await pickImageFile(MAX_EMBED_BYTES);
@@ -1746,8 +1749,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
                 {draft.banner && (
                     <Button
-                        size={Button.Sizes.SMALL}
-                        color={Button.Colors.RED}
+                        size="small"
+                        variant="dangerPrimary"
                         onClick={() => setDraft({ ...draft, banner: undefined })}
                     >Quitar banner</Button>
                 )}
@@ -1755,7 +1758,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
             {draft.banner?.image?.url && (
                 <div className={Margins.top8}>
-                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                    <Text size="xs" weight="normal" className={Margins.bottom8}>
                         Arrastra para elegir qué parte del banner se ve.
                     </Text>
                     <ImagePositionPicker
@@ -1769,9 +1772,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             banner: { ...d.banner, image: { ...d.banner!.image!, positionX, positionY } }
                         }))}
                     />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                    <Heading tag="h5" className={Margins.top8}>
                         Zoom: {(draft.banner.image.zoom ?? 1).toFixed(2)}×
-                    </Forms.FormTitle>
+                    </Heading>
                     <Slider
                         minValue={1}
                         maxValue={3}
@@ -1784,7 +1787,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         onMarkerRender={(v: number) => `${v}×`}
                     />
                     <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
-                        <Text variant="text-xs/normal">Ajuste:</Text>
+                        <Text size="xs" weight="normal">Ajuste:</Text>
                         <Select
                             options={FIT_OPTIONS as unknown as Array<{ label: string; value: string; }>}
                             select={(fit: string) => setDraft(d => ({
@@ -1796,8 +1799,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             closeOnSelect
                         />
                         <Button
-                            size={Button.Sizes.SMALL}
-                            color={Button.Colors.PRIMARY}
+                            size="small"
+                            variant="secondary"
                             onClick={() => setDraft(d => ({
                                 ...d,
                                 banner: { ...d.banner, image: { ...d.banner!.image!, positionX: 50, positionY: 50, zoom: 1 } }
@@ -1807,8 +1810,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 </div>
             )}
 
-            <Forms.FormTitle tag="h3" className={Margins.top16}>Foto de perfil</Forms.FormTitle>
-            <Text variant="text-sm/normal">
+            <Heading tag="h3" className={Margins.top16}>Foto de perfil</Heading>
+            <Text size="sm" weight="normal">
                 Pega una URL o elige un archivo de tu equipo — igual que el banner. Reemplaza tu
                 avatar solo en clientes con xcord; tu foto real en Discord no cambia.
             </Text>
@@ -1824,7 +1827,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
             <Flex className={Margins.top8}>
                 <Button
-                    size={Button.Sizes.SMALL}
+                    size="small"
                     disabled={uploading}
                     onClick={async () => {
                         const picked = await pickImageFile(MAX_UPLOAD_BYTES);
@@ -1852,8 +1855,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 >{uploading ? "Subiendo…" : "Subir archivo…"}</Button>
 
                 <Button
-                    size={Button.Sizes.SMALL}
-                    color={Button.Colors.PRIMARY}
+                    size="small"
+                    variant="secondary"
                     disabled={uploading}
                     onClick={async () => {
                         const picked = await pickImageFile(MAX_EMBED_BYTES);
@@ -1874,8 +1877,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
                 {draft.avatar?.image && (
                     <Button
-                        size={Button.Sizes.SMALL}
-                        color={Button.Colors.RED}
+                        size="small"
+                        variant="dangerPrimary"
                         onClick={() => setDraft({ ...draft, avatar: { ...draft.avatar, image: undefined } })}
                     >Quitar foto</Button>
                 )}
@@ -1883,7 +1886,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
 
             {draft.avatar?.image?.url && (
                 <div className={Margins.top8}>
-                    <Text variant="text-xs/normal" className={Margins.bottom8}>
+                    <Text size="xs" weight="normal" className={Margins.bottom8}>
                         Arrastra para elegir qué parte de la foto se ve.
                     </Text>
                     <ImagePositionPicker
@@ -1899,9 +1902,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX, positionY } }
                         }))}
                     />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>
+                    <Heading tag="h5" className={Margins.top8}>
                         Zoom: {(draft.avatar.image.zoom ?? 1).toFixed(2)}×
-                    </Forms.FormTitle>
+                    </Heading>
                     <Slider
                         minValue={1}
                         maxValue={3}
@@ -1914,7 +1917,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                         onMarkerRender={(v: number) => `${v}×`}
                     />
                     <Flex className={Margins.top8} style={{ alignItems: "center", gap: "8px" }}>
-                        <Text variant="text-xs/normal">Ajuste:</Text>
+                        <Text size="xs" weight="normal">Ajuste:</Text>
                         <Select
                             options={FIT_OPTIONS as unknown as Array<{ label: string; value: string; }>}
                             select={(fit: string) => setDraft(d => ({
@@ -1926,8 +1929,8 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             closeOnSelect
                         />
                         <Button
-                            size={Button.Sizes.SMALL}
-                            color={Button.Colors.PRIMARY}
+                            size="small"
+                            variant="secondary"
                             onClick={() => setDraft(d => ({
                                 ...d,
                                 avatar: { ...d.avatar, image: { ...d.avatar!.image!, positionX: 50, positionY: 50, zoom: 1 } }
@@ -1962,7 +1965,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 title="Marco del avatar"
                 description="Decoraciones animadas alrededor de tu foto."
             >
-            <Text variant="text-xs/normal">
+            <Text size="xs" weight="normal">
                 «Cargar catálogo» trae los más populares de la tienda, no solo los que ya posees.
                 Si el que buscas no aparece, clic derecho sobre un perfil con ese marco puesto →
                 «View Avatar Decoration», y pega aquí la URL de la imagen.
@@ -2026,7 +2029,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 title="Borde de la tarjeta"
                 description="Marcos visuales renderizados por Discord."
             >
-            <Text variant="text-xs/normal">
+            <Text size="xs" weight="normal">
                 Se renderiza con el propio código de Discord —el mismo campo que usa el efecto—,
                 no con una aproximación nuestra.
             </Text>
@@ -2050,9 +2053,9 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     }}
                 />
             ) : (
-                <Text variant="text-xs/normal">Pulsa «Cargar catálogo» para poder elegir uno.</Text>
+                <Text size="xs" weight="normal">Pulsa «Cargar catálogo» para poder elegir uno.</Text>
             )}
-            {loadingBorder && <Text variant="text-xs/normal">Cargando piezas del borde…</Text>}
+            {loadingBorder && <Text size="xs" weight="normal">Cargando piezas del borde…</Text>}
             <CatalogPagination section={borders} />
 
             </EditorSubsection>
@@ -2061,7 +2064,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 title="Placa de nombre"
                 description="Diseños decorativos detrás del nombre."
             >
-            <Text variant="text-xs/normal">
+            <Text size="xs" weight="normal">
                 Sin override que valga: Discord la lee directo del usuario. La pintamos con el
                 mismo truco que el resto — nuestro valor gana solo cuando no tienes una real puesta.
             </Text>
@@ -2104,7 +2107,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 compact
             >
 
-            <Text variant="text-sm/normal">
+            <Text size="sm" weight="normal">
                 URL de un .woff2 o .ttf. Una por línea, con el formato <code>Nombre = URL</code>.
             </Text>
             <TextInput
@@ -2125,11 +2128,11 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                 <div className="xcord-editor-actions">
                     <Button disabled={!dirty} onClick={controller.save}>Guardar</Button>
                     <Button
-                        color={Button.Colors.PRIMARY}
+                        variant="secondary"
                         disabled={!dirty}
                         onClick={controller.discard}
                     >Descartar cambios</Button>
-                    <Button color={Button.Colors.RED} onClick={controller.resetAll}>
+                    <Button variant="dangerPrimary" onClick={controller.resetAll}>
                         Restablecer todo
                     </Button>
                 </div>
@@ -2141,13 +2144,13 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                     title="Sincronización"
                     description="Publica tu perfil de forma verificada para otros usuarios de xcord."
                 >
-                    <Text variant="text-sm/normal">
+                    <Text size="sm" weight="normal">
                         Publica tu perfil para que otros usuarios de xcord vean tus
                         personalizaciones. Se publica lo ya guardado, nunca un cambio sin
                         confirmar{dirty ? " — tienes cambios sin guardar ahora mismo" : ""}.
                     </Text>
 
-                    <Text variant="text-xs/normal" className={Margins.top8}>
+                    <Text size="xs" weight="normal" className={Margins.top8}>
                         {sync.isVerified()
                             ? "✓ Vinculado con tu cuenta de Discord: nadie más puede publicar en tu nombre."
                             : "Sin vincular todavía. Cualquiera con tu id de Discord podría reclamarlo antes que tú — vincula tu cuenta para evitarlo."}
@@ -2190,7 +2193,7 @@ export function ProfileEditor({ controller, showActions = true, sync }: {
                             }}
                         >{syncing ? "Publicando…" : "Publicar perfil"}</Button>
                         <Button
-                            color={Button.Colors.RED}
+                            variant="dangerPrimary"
                             disabled={syncing}
                             onClick={async () => {
                                 if (!confirm("¿Retirar tu perfil de la nube? Otros usuarios de xcord dejarán de verlo."))

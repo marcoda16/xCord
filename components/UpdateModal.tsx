@@ -14,8 +14,9 @@
  * no se construye HTML— y llega ya validado y recortado por `parseManifest`.
  */
 
+import { Text } from "@components/Text";
 import type { RenderModalProps } from "@vencord/discord-types";
-import { Modal, Text } from "@webpack/common";
+import { Modal } from "@webpack/common";
 
 import type { UpdateManifest } from "../lib/updates";
 
@@ -77,30 +78,30 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
                     background: "var(--brand-500, #5865f2)"
                 }}>x</div>
                 <div style={{ minWidth: 0 }}>
-                    <Text variant="text-md/semibold" style={{ overflowWrap: "anywhere" }}>
+                    <Text size="md" weight="semibold" style={{ overflowWrap: "anywhere" }}>
                         xcord {manifest.latest} ya está disponible
                     </Text>
-                    <Text variant="text-xs/normal" style={{ marginTop: 2, color: "var(--text-muted)" }}>
+                    <Text size="xs" weight="normal" style={{ marginTop: 2, color: "var(--text-muted)" }}>
                         Versión instalada: {current}
                     </Text>
                 </div>
             </div>
 
             {manifest.message && (
-                <Text variant="text-sm/normal" style={{ marginTop: 14, overflowWrap: "anywhere" }}>
+                <Text size="sm" weight="normal" style={{ marginTop: 14, overflowWrap: "anywhere" }}>
                     {manifest.message}
                 </Text>
             )}
 
             {manifest.notes.length > 0 && (
                 <div style={{ marginTop: 14 }}>
-                    <Text variant="text-xs/semibold" style={{ color: "var(--text-muted)" }}>
+                    <Text size="xs" weight="semibold" style={{ color: "var(--text-muted)" }}>
                         NOVEDADES
                     </Text>
                     <ul style={{ margin: "8px 0 0", paddingLeft: 20, overflowWrap: "anywhere" }}>
                         {manifest.notes.map((note, i) => (
                             <li key={i} style={{ marginTop: i ? 6 : 0 }}>
-                                <Text variant="text-sm/normal" tag="span">{note}</Text>
+                                <Text size="sm" weight="normal" tag="span">{note}</Text>
                             </li>
                         ))}
                     </ul>
@@ -109,7 +110,7 @@ export function UpdateModal({ props, manifest, current, onDismiss, onOpen }: {
 
             <div style={{ margin: "16px 0 12px", borderTop: "1px solid var(--background-modifier-accent)" }} />
 
-            <Text variant="text-xs/normal" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+            <Text size="xs" weight="normal" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
                 Se abrirá <code>xcord.bat</code> en una ventana. Sigue sus instrucciones y, al terminar, reinicia Discord por completo.
             </Text>
         </Modal>

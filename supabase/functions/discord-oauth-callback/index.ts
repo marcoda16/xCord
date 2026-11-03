@@ -1,3 +1,4 @@
+// @ts-nocheck — código Deno: lo comprueba Deno al desplegar, no el tsc de Vencord.
 // Discord redirige aquí tras el login. Sin verify_jwt: es una navegación
 // directa del navegador del usuario, sin forma de mandar un token de Supabase.
 // La autenticación real la hace Discord: solo aceptamos lo que llega con un

@@ -18,13 +18,14 @@
  * La capa 1 se usa siempre que se pueda: es más estable y más fiel.
  */
 
+import { Button } from "@components/Button";
 import { definePluginSettings } from "@api/Settings";
 import { Devs } from "@utils/constants";
 import definePlugin, { OptionType, type PluginNative } from "@utils/types";
 import type { UserProfile } from "@vencord/discord-types";
 import { findStoreLazy } from "@webpack";
-import { Button, RelationshipStore, UserStore } from "@webpack/common";
-import virtualMerge from "virtual-merge";
+import { RelationshipStore, UserStore } from "@webpack/common";
+import virtualMerge from "./lib/virtualMerge";
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { openModal } from "@utils/modal";
@@ -133,7 +134,7 @@ const settings = definePluginSettings({
         description: "Buscar actualizaciones",
         component: () => (
             <Button
-                size={Button.Sizes.SMALL}
+                size="small"
                 onClick={() => void runUpdateCheck(true)}
             >Buscar actualizaciones</Button>
         )

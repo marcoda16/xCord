@@ -1,6 +1,9 @@
+import { Button } from "@components/Button";
+import { Text } from "@components/Text";
+import { Heading } from "@components/Heading";
 import { FormSwitch } from "@components/FormSwitch";
 import { Margins } from "@utils/margins";
-import { Button, Forms, Text, TextInput } from "@webpack/common";
+import { TextInput } from "@webpack/common";
 
 import { MAX_WIDGET_LINKS, safeHttpsUrl } from "../lib/widgetData";
 import type { ProfileWidgetHero, ProfileWidgetLink, ProfileWidgets } from "../types";
@@ -26,7 +29,7 @@ function urlError(value: string | undefined): boolean {
 function UrlHint({ value, image = false }: { value?: string; image?: boolean; }) {
     if (!urlError(value)) return null;
     return (
-        <Text variant="text-xs/normal" style={{ color: "var(--text-danger)" }}>
+        <Text size="xs" weight="normal" style={{ color: "var(--text-danger)" }}>
             {image ? "La imagen" : "El enlace"} debe usar una URL HTTPS válida.
         </Text>
     );
@@ -111,7 +114,7 @@ export function WidgetsEditor({ value, onChange }: WidgetsEditorProps) {
 
     return (
         <div className="xcord-widget-editor">
-            <Text variant="text-sm/normal">
+            <Text size="sm" weight="normal">
                 La tarjeta destacada también aparece en el perfil emergente. Las tarjetas secundarias aparecen en el perfil completo. Visibles para usuarios que también tengan xcord.
             </Text>
 
@@ -126,28 +129,28 @@ export function WidgetsEditor({ value, onChange }: WidgetsEditorProps) {
 
             {widgets.hero && (
                 <div className="xcord-widget-panel">
-                    <Forms.FormTitle tag="h5">Título opcional</Forms.FormTitle>
+                    <Heading tag="h5">Título opcional</Heading>
                     <TextInput
                         value={widgets.hero.title}
                         placeholder="Mi proyecto"
                         maxLength={48}
                         onChange={(title: string) => updateHero({ title })}
                     />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Enlace opcional</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Enlace opcional</Heading>
                     <TextInput
                         value={widgets.hero.url}
                         placeholder="https://…"
                         onChange={(url: string) => updateHero({ url })}
                     />
                     <UrlHint value={widgets.hero.url} />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Imagen horizontal</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Imagen horizontal</Heading>
                     <TextInput
                         value={widgets.hero.imageUrl ?? ""}
                         placeholder="https://…/portada.png"
                         onChange={(imageUrl: string) => updateHero({ imageUrl })}
                     />
                     <UrlHint value={widgets.hero.imageUrl} image />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Descripción opcional</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Descripción opcional</Heading>
                     <TextInput
                         value={widgets.hero.description ?? ""}
                         placeholder="Una descripción breve"
@@ -158,11 +161,11 @@ export function WidgetsEditor({ value, onChange }: WidgetsEditorProps) {
             )}
 
             <div className="xcord-widget-toolbar">
-                <Forms.FormTitle tag="h5" style={{ margin: 0 }}>
+                <Heading tag="h5" style={{ margin: 0 }}>
                     Tarjetas secundarias ({widgets.links.length}/{MAX_WIDGET_LINKS})
-                </Forms.FormTitle>
+                </Heading>
                 <Button
-                    size={Button.Sizes.SMALL}
+                    size="small"
                     disabled={widgets.links.length >= MAX_WIDGET_LINKS}
                     onClick={() => setWidgets({ ...widgets, links: [...widgets.links, newLink()] })}
                 >Agregar tarjeta</Button>
@@ -171,27 +174,27 @@ export function WidgetsEditor({ value, onChange }: WidgetsEditorProps) {
             {widgets.links.map((link, index) => (
                 <div key={link.id} className="xcord-widget-panel">
                     <div className="xcord-widget-item-heading">
-                        <Text variant="text-sm/semibold">Tarjeta {index + 1}</Text>
+                        <Text size="sm" weight="semibold">Tarjeta {index + 1}</Text>
                         <div className="xcord-widget-item-actions">
-                            <Button size={Button.Sizes.SMALL} disabled={index === 0} onClick={() => moveLink(index, -1)}>↑</Button>
-                            <Button size={Button.Sizes.SMALL} disabled={index === widgets.links.length - 1} onClick={() => moveLink(index, 1)}>↓</Button>
+                            <Button size="small" disabled={index === 0} onClick={() => moveLink(index, -1)}>↑</Button>
+                            <Button size="small" disabled={index === widgets.links.length - 1} onClick={() => moveLink(index, 1)}>↓</Button>
                             <Button
-                                size={Button.Sizes.SMALL}
-                                color={Button.Colors.RED}
+                                size="small"
+                                variant="dangerPrimary"
                                 onClick={() => setWidgets({ ...widgets, links: widgets.links.filter(item => item.id !== link.id) })}
                             >Quitar</Button>
                         </div>
                     </div>
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Título</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Título</Heading>
                     <TextInput
                         value={link.title}
                         placeholder="Mis redes"
                         maxLength={48}
                         onChange={(title: string) => updateLink(link.id, { title })}
                     />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Descripción</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Descripción</Heading>
                     <TextInput value={link.description ?? link.url ?? ""} placeholder="Una descripción breve" maxLength={120} onChange={(description: string) => updateLink(link.id, { description, url: undefined })} />
-                    <Forms.FormTitle tag="h5" className={Margins.top8}>Icono</Forms.FormTitle>
+                    <Heading tag="h5" className={Margins.top8}>Icono</Heading>
                     <TextInput
                         value={link.imageUrl ?? ""}
                         placeholder="https://…/icono.png"

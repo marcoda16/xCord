@@ -1,3 +1,4 @@
+// @ts-nocheck — código Deno: lo comprueba Deno al desplegar, no el tsc de Vencord.
 // El plugin sondea aquí mientras esperas a que termines de aprobar en el
 // navegador. Devuelve el estado de una sesión, y borra la fila al entregar
 // un resultado final — consumo único, no queda ningún secreto guardado ahí

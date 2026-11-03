@@ -1,3 +1,4 @@
+// @ts-nocheck — código Deno: lo comprueba Deno al desplegar, no el tsc de Vencord.
 // Sube las imágenes de un perfil a Storage y devuelve sus URL públicas.
 //
 // Por qué existe: el perfil viaja a Postgres como jsonb, y una imagen local
