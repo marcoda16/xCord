@@ -1,7 +1,7 @@
 {
   "latest": "1.0.3",
   "title": "Nueva versión de xcord",
-  "message": "Vuelve a funcionar con la última versión de Vencord y corrige el banner en perfiles privados.",
+  "message": "Vuelve a CeitoTweaks y descarga la versión más actualizada desde el apartado de Programas.",
   "downloadUrl": "https://github.com/marcoda16/xCord#instalaci%C3%B3n-para-probar-el-plugin",
   "notes": [
     "Compatible con Vencord 1.15.15, que impedía compilar el plugin.",
