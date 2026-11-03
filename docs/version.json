@@ -1,12 +1,11 @@
 {
-  "latest": "1.0.2",
+  "latest": "1.0.3",
   "title": "Nueva versión de xcord",
-  "message": "Paginación en los catálogos y correcciones en los efectos del nombre y el fondo del perfil.",
+  "message": "Vuelve a funcionar con la última versión de Vencord y corrige el banner en perfiles privados.",
   "downloadUrl": "https://github.com/marcoda16/xCord#instalaci%C3%B3n-para-probar-el-plugin",
   "notes": [
-    "Páginas numeradas, Anterior y Siguiente en decoraciones, efectos, bordes y placas de nombre.",
-    "Las búsquedas vuelven a la primera página y descartan respuestas anteriores.",
-    "Los efectos del nombre usan la cantidad correcta de colores, sin relleno negro.",
-    "El fondo del perfil muestra solo los dos colores que admite Discord."
+    "Compatible con Vencord 1.15.15, que impedía compilar el plugin.",
+    "Si actualizaste después del 28 de octubre y no viste cambios, era por eso.",
+    "El aviso de perfil privado ya no muestra el banner encima del texto."
   ]
 }
