@@ -135,9 +135,35 @@ function tagElements(root: Element) {
     ];
 
     for (const [selector, className] of map) {
-        for (const el of root.querySelectorAll(selector))
+        for (const el of root.querySelectorAll(selector)) {
+            if (className === `${NS}-banner` && !looksLikeProfileBanner(el)) {
+                // Por si quedó marcado de un repaso anterior.
+                el.classList.remove(className);
+                continue;
+            }
             el.classList.add(className);
+        }
     }
+}
+
+/**
+ * Texto que puede llevar el banner de verdad sin dejar de serlo. El banner no
+ * tiene texto propio; el margen es por si Discord le mete alguna etiqueta corta.
+ */
+const MAX_BANNER_TEXT = 20;
+
+/**
+ * El selector del banner es una coincidencia parcial de clase, y Discord usa
+ * `banner_` también para los avisos que salen dentro del perfil. El de "el
+ * perfil de X es privado" cogía la imagen del banner y el texto quedaba encima,
+ * ilegible.
+ *
+ * Distinguirlos por clase sería frágil —Discord renombra en cada
+ * actualización—. Por contenido no: el banner nunca lleva una frase, y un
+ * aviso siempre.
+ */
+function looksLikeProfileBanner(el: Element): boolean {
+    return (el.textContent ?? "").trim().length <= MAX_BANNER_TEXT;
 }
 
 /**
